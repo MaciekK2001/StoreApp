@@ -1,4 +1,4 @@
-package produkcja.meble.app.Security;
+package produkcja.meble.app.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -9,9 +9,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import produkcja.meble.app.Entities.UserAccount;
-import produkcja.meble.app.Services.JwtService;
-import produkcja.meble.app.Services.UserAccountDetailsService;
+import produkcja.meble.app.entity.UserAccount;
+import produkcja.meble.app.service.JwtService;
+import produkcja.meble.app.service.UserAccountDetailsService;
 
 import java.io.IOException;
 

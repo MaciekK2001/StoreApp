@@ -1,64 +1,64 @@
-package produkcja.meble.app.DTO;
+package produkcja.meble.app.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
-import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@AllArgsConstructor
-@Getter
 @Builder
-public class CreateOrderRequest{
-    @NotNull
-    @FutureOrPresent
-    private LocalDateTime deliveryDate;
+public record CreateOrderRequest(
+        @NotNull(message = "Delivery date is required")
+        @FutureOrPresent(message = "Delivery date must be today or in the future")
+        LocalDateTime deliveryDate,
 
-    @NotBlank
-    private String phoneNumber;
+        @NotBlank(message = "Phone number is required")
+        String phoneNumber,
 
-    @Positive
-    private int fulfillmentTime;
+        @PositiveOrZero(message = "Fulfillment time must be greater than or equal to 0")
+        int fulfillmentTime,
 
-    private String contactRemarks;
+        String contactRemarks,
 
-    @NotBlank
-    private String address;
+        @NotBlank(message = "Address is required")
+        String address,
 
-    @PositiveOrZero
-    private double assemblyPrice;
+        @PositiveOrZero(message = "Assembly price must be greater than or equal to 0")
+        BigDecimal assemblyPrice,
 
-    private String assemblyRemarks;
+        String assemblyRemarks,
 
-    @PositiveOrZero
-    private double discount;
+        @PositiveOrZero(message = "Discount must be greater than or equal to 0")
+        BigDecimal discount,
 
-    private String discountRemarks;
+        String discountRemarks,
 
-    @PositiveOrZero
-    private double transportPrice;
+        @PositiveOrZero(message = "Transport price must be greater than or equal to 0")
+        BigDecimal transportPrice,
 
-    private String transportRemarks;
+        String transportRemarks,
 
-    private String remarks;
+        String remarks,
 
-    @PositiveOrZero
-    private double carryProductsPrice;
+        @PositiveOrZero(message = "Carry products price must be greater than or equal to 0")
+        BigDecimal carryProductsPrice,
 
-    private String carryProductsRemarks;
+        String carryProductsRemarks,
 
-    @PositiveOrZero
-    private double deposit;
+        @PositiveOrZero(message = "Deposit must be greater than or equal to 0")
+        BigDecimal deposit,
 
-    @Valid
-    @NotEmpty
-    private List<OrderItemRequest> orderItemRequests;
+        @Valid
+        @NotEmpty(message = "Order must contain at least one item")
+        List<OrderItemRequest> orderItemRequests
+) {
+    public List<OrderItemRequest> getOrderItemRequests() {
+        return orderItemRequests;
+    }
 }

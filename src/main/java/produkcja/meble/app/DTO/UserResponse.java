@@ -1,7 +1,7 @@
-package produkcja.meble.app.DTO;
+package produkcja.meble.app.dto;
 
-import produkcja.meble.app.Entities.AccountRole;
-import produkcja.meble.app.Entities.UserAccount;
+import produkcja.meble.app.entity.AccountRole;
+import produkcja.meble.app.entity.UserAccount;
 
 public record UserResponse(
         Long id,

@@ -1,4 +1,4 @@
-package produkcja.meble.app.DTO;
+package produkcja.meble.app.dto;
 
 public record AuthResponse(
         String tokenType,

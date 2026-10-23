@@ -1,21 +1,22 @@
-package produkcja.meble.app.DTO;
+package produkcja.meble.app.dto;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
-import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
 
-
-@AllArgsConstructor
-@Getter
 @Builder
-public class OrderItemRequest {
-    @NotNull
-    private Long productId;
+public record OrderItemRequest(
+        @NotNull(message = "Product ID is required")
+        Long productId,
 
-    @Positive
-    private int quantity;
+        @Min(value = 1, message = "Quantity must be at least 1")
+        int quantity
+) {
+    public Long getProductId() {
+        return productId;
+    }
+
+    public int getQuantity() {
+        return quantity;
+    }
 }
-
-

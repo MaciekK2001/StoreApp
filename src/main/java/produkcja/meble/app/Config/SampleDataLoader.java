@@ -1,27 +1,30 @@
-package produkcja.meble.app.Config;
+package produkcja.meble.app.config;
 
+import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import produkcja.meble.app.DTO.CreateOrderRequest;
-import produkcja.meble.app.DTO.OrderItemRequest;
-import produkcja.meble.app.Entities.AccountRole;
-import produkcja.meble.app.Entities.Product;
-import produkcja.meble.app.Entities.UserAccount;
-import produkcja.meble.app.Repositories.OrderRepository;
-import produkcja.meble.app.Repositories.ProductRepository;
-import produkcja.meble.app.Repositories.UserAccountRepository;
-import produkcja.meble.app.Services.OrderService;
-import produkcja.meble.app.Services.ProductService;
+import produkcja.meble.app.dto.CreateOrderRequest;
+import produkcja.meble.app.dto.OrderItemRequest;
+import produkcja.meble.app.dto.ProductRequest;
+import produkcja.meble.app.dto.ProductResponse;
+import produkcja.meble.app.entity.AccountRole;
+import produkcja.meble.app.entity.UserAccount;
+import produkcja.meble.app.repository.OrderRepository;
+import produkcja.meble.app.repository.ProductRepository;
+import produkcja.meble.app.repository.UserAccountRepository;
+import produkcja.meble.app.service.OrderService;
+import produkcja.meble.app.service.ProductService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Component
-@Profile("dev")
+@Profile({"dev", "test"})
+@RequiredArgsConstructor
 public class SampleDataLoader implements CommandLineRunner {
 
     private final ProductService productService;
@@ -31,68 +34,52 @@ public class SampleDataLoader implements CommandLineRunner {
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public SampleDataLoader(
-            ProductService productService,
-            OrderService orderService,
-            ProductRepository productRepository,
-            OrderRepository orderRepository,
-            UserAccountRepository userAccountRepository,
-            PasswordEncoder passwordEncoder
-    ) {
-        this.productService = productService;
-        this.orderService = orderService;
-        this.productRepository = productRepository;
-        this.orderRepository = orderRepository;
-        this.userAccountRepository = userAccountRepository;
-        this.passwordEncoder = passwordEncoder;
-    }
-
     @Override
     public void run(String @NonNull ... args) {
-        loadUsers();
+        UserAccount admin = loadUsers();
 
         if (productRepository.count() > 0 || orderRepository.count() > 0) {
             return;
         }
 
-        Product bed = productService.saveProduct(Product.builder()
+        ProductResponse bed = productService.saveProduct(ProductRequest.builder()
                 .price(BigDecimal.valueOf(2400))
                 .length(200)
                 .height(100)
                 .depth(90)
                 .colour("Dark brown")
                 .model("Kanciate")
-                .type("Bed")
+                .type("BED")
                 .material("Oak")
                 .fabric("Leather")
                 .remarks("Sample bed")
                 .equipment("Storage box")
                 .build());
 
-        Product sofa = productService.saveProduct(Product.builder()
+        ProductResponse sofa = productService.saveProduct(ProductRequest.builder()
                 .price(BigDecimal.valueOf(3200))
                 .length(260)
                 .height(95)
                 .depth(110)
                 .colour("Grey")
                 .model("Moderno")
-                .type("Sofa")
+                .type("SOFA")
                 .material("Beech")
                 .fabric("Velour")
                 .remarks("Sample sofa")
                 .equipment("Sleeping function")
                 .build());
 
-        Product wardrobe = productService.saveProduct(Product.builder()
+        ProductResponse wardrobe = productService.saveProduct(ProductRequest.builder()
                 .price(BigDecimal.valueOf(4100))
                 .length(240)
                 .height(220)
                 .depth(65)
                 .colour("White")
                 .model("Praktik")
-                .type("Wardrobe")
+                .type("WARDROBE")
                 .material("Laminated board")
-                .fabric("None")
+                .fabric(null)
                 .remarks("Sample wardrobe")
                 .equipment("Mirror")
                 .build());
@@ -103,27 +90,27 @@ public class SampleDataLoader implements CommandLineRunner {
                 .fulfillmentTime(14)
                 .contactRemarks("Call after 16")
                 .address("Warszawa, ul. Przykladowa 10")
-                .assemblyPrice(200)
+                .assemblyPrice(BigDecimal.valueOf(200))
                 .assemblyRemarks("Assembly on site")
-                .discount(100)
+                .discount(BigDecimal.valueOf(100))
                 .discountRemarks("Regular customer discount")
-                .transportPrice(150)
+                .transportPrice(BigDecimal.valueOf(150))
                 .transportRemarks("Evening delivery")
                 .remarks("Sample order with bed and sofa")
-                .carryProductsPrice(80)
+                .carryProductsPrice(BigDecimal.valueOf(80))
                 .carryProductsRemarks("Third floor")
-                .deposit(500)
+                .deposit(BigDecimal.valueOf(500))
                 .orderItemRequests(List.of(
                         OrderItemRequest.builder()
-                                .productId(bed.getId())
+                                .productId(bed.id())
                                 .quantity(1)
                                 .build(),
                         OrderItemRequest.builder()
-                                .productId(sofa.getId())
+                                .productId(sofa.id())
                                 .quantity(1)
                                 .build()
                 ))
-                .build());
+                .build(), admin);
 
         orderService.saveOrder(CreateOrderRequest.builder()
                 .deliveryDate(LocalDateTime.now().plusDays(21))
@@ -131,42 +118,32 @@ public class SampleDataLoader implements CommandLineRunner {
                 .fulfillmentTime(21)
                 .contactRemarks("Email preferred")
                 .address("Krakow, ul. Testowa 5")
-                .assemblyPrice(300)
+                .assemblyPrice(BigDecimal.valueOf(300))
                 .assemblyRemarks("Wall mounting required")
-                .discount(0)
+                .discount(BigDecimal.ZERO)
                 .discountRemarks("")
-                .transportPrice(180)
+                .transportPrice(BigDecimal.valueOf(180))
                 .transportRemarks("Morning delivery")
                 .remarks("Sample wardrobe order")
-                .carryProductsPrice(120)
+                .carryProductsPrice(BigDecimal.valueOf(120))
                 .carryProductsRemarks("Elevator available")
-                .deposit(700)
+                .deposit(BigDecimal.valueOf(700))
                 .orderItemRequests(List.of(
                         OrderItemRequest.builder()
-                                .productId(wardrobe.getId())
+                                .productId(wardrobe.id())
                                 .quantity(2)
                                 .build()
                 ))
-                .build());
+                .build(), admin);
     }
 
-    private void loadUsers() {
-        if (!userAccountRepository.existsByUsername("admin")) {
-            userAccountRepository.save(UserAccount.builder()
-                    .username("admin")
-                    .email("admin@example.com")
-                    .password(passwordEncoder.encode("admin1234"))
-                    .role(AccountRole.ADMIN)
-                    .build());
-        }
-
-        if (!userAccountRepository.existsByUsername("user")) {
-            userAccountRepository.save(UserAccount.builder()
-                    .username("user")
-                    .email("user@example.com")
-                    .password(passwordEncoder.encode("user12345"))
-                    .role(AccountRole.USER)
-                    .build());
-        }
+    private UserAccount loadUsers() {
+        return userAccountRepository.findByUsername("admin")
+                .orElseGet(() -> userAccountRepository.save(UserAccount.builder()
+                        .username("admin")
+                        .email("admin@firma.pl")
+                        .password(passwordEncoder.encode("admin1234"))
+                        .role(AccountRole.ADMIN)
+                        .build()));
     }
 }

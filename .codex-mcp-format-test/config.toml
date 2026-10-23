@@ -1,0 +1,3 @@
+[mcp_servers.Foo]
+command = "powershell"
+args = ["-NoProfile", "-Command", "Write-Output hi"]
