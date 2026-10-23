@@ -1,0 +1,8 @@
+target/
+.git/
+.gitignore
+android-app/
+.idea/
+*.iml
+.gemini/
+.agents/
