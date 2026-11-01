@@ -1,6 +1,5 @@
 package produkcja.meble.app.controller;
 
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
@@ -25,7 +24,6 @@ import produkcja.meble.app.exception.BadRequestException;
 import produkcja.meble.app.service.FileStorageService;
 import produkcja.meble.app.service.ProductService;
 
-import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -91,27 +89,12 @@ public class ProductController {
     }
 
     @GetMapping("/images/{fileName:.+}")
-    public ResponseEntity<Resource> getImage(@PathVariable String fileName, HttpServletRequest request) {
-        Resource resource = fileStorageService.loadFileAsResource(fileName);
-        String contentType = null;
-        try {
-            contentType = request.getServletContext().getMimeType(resource.getFile().getAbsolutePath());
-        } catch (IOException ignored) {
-        }
-        if (contentType == null) {
-            String lower = fileName.toLowerCase();
-            if (lower.endsWith(".png")) {
-                contentType = "image/png";
-            } else if (lower.endsWith(".webp")) {
-                contentType = "image/webp";
-            } else {
-                contentType = "image/jpeg";
-            }
-        }
+    public ResponseEntity<Resource> getImage(@PathVariable String fileName) {
+        FileStorageService.StoredImageResource storedImage = fileStorageService.loadStoredImage(fileName);
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(contentType))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.getFilename() + "\"")
+                .contentType(MediaType.parseMediaType(storedImage.contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + storedImage.fileName() + "\"")
                 .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400")
-                .body(resource);
+                .body(storedImage.resource());
     }
 }

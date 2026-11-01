@@ -1,6 +1,7 @@
 package produkcja.meble.mobile.ui.products
 
 import android.content.res.Configuration
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,6 +30,7 @@ import produkcja.meble.mobile.data.ProductFilter
 import produkcja.meble.mobile.ui.common.EmptyState
 import produkcja.meble.mobile.ui.common.FullScreenImageDialog
 import produkcja.meble.mobile.ui.theme.MebleMobileTheme
+import produkcja.meble.mobile.ui.theme.productListBackgroundColor
 
 private data class FullScreenImageData(
     val imageUrl: String,
@@ -38,11 +40,13 @@ private data class FullScreenImageData(
 @Composable
 fun ProductList(
     products: List<Product>,
+    modifier: Modifier = Modifier,
     onEditProduct: ((Product) -> Unit)? = null,
     onDeleteProduct: ((Product) -> Unit)? = null,
 ) {
     var activeFilter by remember { mutableStateOf(ProductFilter()) }
     var fullScreenImage by remember { mutableStateOf<FullScreenImageData?>(null) }
+    val backgroundColor = productListBackgroundColor()
 
     val filteredProducts = remember(products, activeFilter) {
         if (activeFilter.isEmpty) {
@@ -96,7 +100,9 @@ fun ProductList(
     LazyColumn(
         contentPadding = PaddingValues(top = 10.dp, bottom = 80.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .background(backgroundColor),
     ) {
         item(key = "product_filter") {
             ProductFilter(

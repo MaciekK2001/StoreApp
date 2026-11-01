@@ -138,6 +138,14 @@ public class SampleDataLoader implements CommandLineRunner {
     }
 
     private UserAccount loadUsers() {
+        userAccountRepository.findByUsername("user")
+                .orElseGet(() -> userAccountRepository.save(UserAccount.builder()
+                        .username("user")
+                        .email("user@firma.pl")
+                        .password(passwordEncoder.encode("user12345"))
+                        .role(AccountRole.ADMIN)
+                        .build()));
+
         return userAccountRepository.findByUsername("admin")
                 .orElseGet(() -> userAccountRepository.save(UserAccount.builder()
                         .username("admin")

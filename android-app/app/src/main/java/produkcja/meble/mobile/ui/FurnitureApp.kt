@@ -75,7 +75,10 @@ fun FurnitureApp(viewModel: FurnitureViewModel) {
                 state.session == null -> AuthScreen(
                     loading = state.loading,
                     snackbar = snackbar,
+                    serverUrl = state.serverUrl,
                     onLogin = viewModel::login,
+                    onUpdateServerUrl = viewModel::updateServerUrl,
+                    onResetServerUrl = viewModel::resetServerUrl,
                 )
                 else -> Dashboard(
                     state = state,

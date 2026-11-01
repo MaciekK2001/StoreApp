@@ -16,8 +16,28 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+    }
 
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/\"")
+    buildTypes {
+        debug {
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            manifestPlaceholders["appName"] = "Meble Dev"
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/\"")
+            buildConfigField("Boolean", "IS_DEV", "true")
+        }
+        release {
+            manifestPlaceholders += mapOf()
+            isMinifyEnabled = false
+            manifestPlaceholders["appName"] = "Meble"
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            buildConfigField("String", "API_BASE_URL", "\"https://storeapp-xf39.onrender.com/\"")
+            buildConfigField("Boolean", "IS_DEV", "false")
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
 
     buildFeatures {

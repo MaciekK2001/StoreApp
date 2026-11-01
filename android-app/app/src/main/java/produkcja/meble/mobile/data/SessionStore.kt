@@ -2,9 +2,24 @@ package produkcja.meble.mobile.data
 
 import android.content.Context
 import org.json.JSONObject
+import produkcja.meble.mobile.BuildConfig
 
 class SessionStore(context: Context) {
     private val preferences = context.getSharedPreferences("meble_session", Context.MODE_PRIVATE)
+
+    fun getServerUrl(): String {
+        return preferences.getString("server_url", BuildConfig.API_BASE_URL) ?: BuildConfig.API_BASE_URL
+    }
+
+    fun setServerUrl(url: String) {
+        val trimmed = url.trim()
+        val sanitized = if (trimmed.endsWith("/")) trimmed else "$trimmed/"
+        preferences.edit().putString("server_url", sanitized).apply()
+    }
+
+    fun resetServerUrl() {
+        preferences.edit().remove("server_url").apply()
+    }
 
     fun load(): AuthSession? {
         val token = preferences.getString("token", null) ?: return null
@@ -39,6 +54,10 @@ class SessionStore(context: Context) {
     }
 
     fun clear() {
-        preferences.edit().clear().apply()
+        preferences.edit()
+            .remove("token_type")
+            .remove("token")
+            .remove("user")
+            .apply()
     }
 }

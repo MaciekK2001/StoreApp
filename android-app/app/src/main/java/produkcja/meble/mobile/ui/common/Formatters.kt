@@ -4,6 +4,11 @@ import java.text.NumberFormat
 import java.util.Locale
 import produkcja.meble.mobile.BuildConfig
 
+object ServerConfig {
+    @Volatile
+    var baseUrl: String = BuildConfig.API_BASE_URL
+}
+
 private val currencyFormatter = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("pl-PL"))
 
 fun money(value: Double): String = currencyFormatter.format(value)
@@ -32,7 +37,7 @@ fun String?.isMeaningful(): Boolean {
  * to a fully qualified URL (e.g. "http://10.0.2.2:8080/api/products/images/xyz.jpg")
  * that Coil and other network image loaders can load directly.
  */
-fun resolveImageUrl(rawUrl: String?, baseUrl: String = BuildConfig.API_BASE_URL): String? {
+fun resolveImageUrl(rawUrl: String?, baseUrl: String = ServerConfig.baseUrl): String? {
     if (!rawUrl.isMeaningful()) return null
     val trimmed = rawUrl!!.trim()
     if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {

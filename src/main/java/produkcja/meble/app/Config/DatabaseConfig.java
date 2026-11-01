@@ -20,6 +20,8 @@ public class DatabaseConfig {
     @Primary
     public DataSource dataSource(
             @Value("${spring.datasource.url:}") String testUrl,
+            @Value("${spring.datasource.username:}") String testUsername,
+            @Value("${spring.datasource.password:}") String testPassword,
             @Value("${spring.datasource.driver-class-name:}") String testDriverClassName
     ) {
         String databaseUrl = System.getenv("DATABASE_URL");
@@ -29,15 +31,16 @@ public class DatabaseConfig {
 
         if (!StringUtils.hasText(databaseUrl)) {
             throw new IllegalStateException(
-                    "Brak konfiguracji bazy danych! Ustaw zmienną środowiskową DATABASE_URL z Rendera."
+                    "Brak konfiguracji bazy danych! Ustaw zmienną środowiskową DATABASE_URL z Rendera " +
+                    "lub skonfiguruj właściwości spring.datasource.url w application-dev.properties."
             );
         }
 
         HikariConfig config = new HikariConfig();
 
-        // Obsługa formatu Render: postgresql://user:password@host:port/dbname lub postgres://...
+        // Obsługa formatu Render/Docker: postgresql://user:password@host:port/dbname lub postgres://...
         if (databaseUrl.startsWith("postgres://") || databaseUrl.startsWith("postgresql://")) {
-            log.info("Wykryto format URL bazy danych Render (postgres://)");
+            log.info("Wykryto format URL bazy danych postgres:// lub postgresql://");
             try {
                 String cleanUrl = databaseUrl;
                 if (cleanUrl.startsWith("postgres://")) {
@@ -57,6 +60,9 @@ public class DatabaseConfig {
                     if (parts.length > 1) {
                         password = parts[1];
                     }
+                } else {
+                    username = testUsername;
+                    password = testPassword;
                 }
 
                 String jdbcUrl = "jdbc:postgresql://" + host + ":" + port + path;
@@ -66,21 +72,33 @@ public class DatabaseConfig {
 
                 config.setDriverClassName("org.postgresql.Driver");
                 config.setJdbcUrl(jdbcUrl);
-                config.setUsername(username);
-                config.setPassword(password);
+                if (StringUtils.hasText(username)) {
+                    config.setUsername(username);
+                }
+                if (StringUtils.hasText(password)) {
+                    config.setPassword(password);
+                }
                 log.info("Skonfigurowano połączenie JDBC: jdbc:postgresql://{}:{}{}", host, port, path);
             } catch (Exception e) {
                 log.error("Błąd parsowania adresu URL bazy: {}, używam bezpośredniej konfiguracji", databaseUrl, e);
                 config.setJdbcUrl(databaseUrl);
+                if (StringUtils.hasText(testUsername)) config.setUsername(testUsername);
+                if (StringUtils.hasText(testPassword)) config.setPassword(testPassword);
             }
         } else {
-            // Dla bazy testowej (np. H2) lub bezpośredniego adresu JDBC
+            // Dla bazy testowej (np. H2) lub standardowego adresu JDBC (np. jdbc:postgresql://localhost:5432/mebledb)
             if (StringUtils.hasText(testDriverClassName)) {
                 config.setDriverClassName(testDriverClassName);
             } else if (databaseUrl.startsWith("jdbc:postgresql:")) {
                 config.setDriverClassName("org.postgresql.Driver");
             }
             config.setJdbcUrl(databaseUrl);
+            if (StringUtils.hasText(testUsername)) {
+                config.setUsername(testUsername);
+            }
+            if (StringUtils.hasText(testPassword)) {
+                config.setPassword(testPassword);
+            }
         }
 
         return new HikariDataSource(config);

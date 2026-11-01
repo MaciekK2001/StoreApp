@@ -21,6 +21,7 @@ import produkcja.meble.mobile.data.FurnitureOrder
 import produkcja.meble.mobile.data.LoginRequest
 import produkcja.meble.mobile.data.Product
 import produkcja.meble.mobile.data.SessionStore
+import produkcja.meble.mobile.ui.common.ServerConfig
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -40,21 +41,47 @@ data class FurnitureUiState(
     val selectedOrder: FurnitureOrder? = null,
     val error: String? = null,
     val showOnlyActiveOrders: Boolean = true,
+    val serverUrl: String = BuildConfig.API_BASE_URL,
 )
 
 class FurnitureViewModel(application: Application) : AndroidViewModel(application) {
-    private val api = ApiClient(BuildConfig.API_BASE_URL)
     private val sessionStore = SessionStore(application)
-    private val _uiState = MutableStateFlow(FurnitureUiState(session = sessionStore.load()))
+    private var currentServerUrl = sessionStore.getServerUrl()
+    private var api = ApiClient(currentServerUrl)
+    private val _uiState = MutableStateFlow(
+        FurnitureUiState(
+            session = sessionStore.load(),
+            serverUrl = currentServerUrl,
+        )
+    )
 
     val uiState: StateFlow<FurnitureUiState> = _uiState.asStateFlow()
 
     init {
+        ServerConfig.baseUrl = currentServerUrl
         if (_uiState.value.session == null) {
             _uiState.update { it.copy(initialized = true) }
         } else {
             refresh()
         }
+    }
+
+    fun updateServerUrl(url: String) {
+        val trimmed = url.trim()
+        val formatted = if (trimmed.endsWith("/")) trimmed else "$trimmed/"
+        sessionStore.setServerUrl(formatted)
+        currentServerUrl = sessionStore.getServerUrl()
+        ServerConfig.baseUrl = currentServerUrl
+        api = ApiClient(currentServerUrl)
+        _uiState.update { it.copy(serverUrl = currentServerUrl) }
+    }
+
+    fun resetServerUrl() {
+        sessionStore.resetServerUrl()
+        currentServerUrl = sessionStore.getServerUrl()
+        ServerConfig.baseUrl = currentServerUrl
+        api = ApiClient(currentServerUrl)
+        _uiState.update { it.copy(serverUrl = currentServerUrl) }
     }
 
     fun login(username: String, password: String) {
@@ -134,7 +161,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         request: CreateProductRequest,
         imageBytes: ByteArray?,
         fileName: String?,
-        mimeType: String?,
+        contentType: String?,
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit,
     ) {
@@ -144,13 +171,13 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         }
         viewModelScope.launch {
             try {
-                val (createdProduct, updatedProducts) = withContext(Dispatchers.IO) {
-                    val created = api.createProduct(request, imageBytes, fileName, mimeType, session)
+                val (created, updatedProducts) = withContext(Dispatchers.IO) {
+                    val product = api.createProduct(request, imageBytes, fileName, contentType, session)
                     val products = api.getProducts(session)
-                    Pair(created, products)
+                    Pair(product, products)
                 }
                 _uiState.update { it.copy(products = updatedProducts) }
-                onSuccess("Mebel „${createdProduct.model}” został pomyślnie dodany.")
+                onSuccess("Produkt \"${created.model}\" został pomyślnie dodany.")
             } catch (exception: Exception) {
                 Log.e("FurnitureViewModel", "Błąd dodawania produktu", exception)
                 val userMsg = exception.toUserMessage()
@@ -167,7 +194,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         request: CreateProductRequest,
         imageBytes: ByteArray?,
         fileName: String?,
-        mimeType: String?,
+        contentType: String?,
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit,
     ) {
@@ -177,15 +204,15 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         }
         viewModelScope.launch {
             try {
-                val (updatedProduct, updatedProducts) = withContext(Dispatchers.IO) {
-                    val updated = api.updateProduct(id, request, imageBytes, fileName, mimeType, session)
+                val (updated, updatedProducts) = withContext(Dispatchers.IO) {
+                    val product = api.updateProduct(id, request, imageBytes, fileName, contentType, session)
                     val products = api.getProducts(session)
-                    Pair(updated, products)
+                    Pair(product, products)
                 }
                 _uiState.update { it.copy(products = updatedProducts) }
-                onSuccess("Mebel „${updatedProduct.model}” został pomyślnie zaktualizowany.")
+                onSuccess("Produkt \"${updated.model}\" został zaktualizowany.")
             } catch (exception: Exception) {
-                Log.e("FurnitureViewModel", "Błąd aktualizacji produktu", exception)
+                Log.e("FurnitureViewModel", "Błąd edycji produktu", exception)
                 val userMsg = exception.toUserMessage()
                 if (exception is ApiException && exception.statusCode == 401) {
                     handleAuthorizedError(exception)
@@ -211,7 +238,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
                     api.getProducts(session)
                 }
                 _uiState.update { it.copy(products = updatedProducts) }
-                onSuccess("Mebel „${product.model}” został pomyślnie usunięty.")
+                onSuccess("Produkt \"${product.model}\" został pomyślnie usunięty.")
             } catch (exception: Exception) {
                 Log.e("FurnitureViewModel", "Błąd usuwania produktu", exception)
                 val userMsg = exception.toUserMessage()
@@ -234,13 +261,13 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         }
         viewModelScope.launch {
             try {
-                val (createdOrder, updatedOrders) = withContext(Dispatchers.IO) {
-                    val created = api.createOrder(request, session)
+                val (created, updatedOrders) = withContext(Dispatchers.IO) {
+                    val order = api.createOrder(request, session)
                     val orders = fetchOrders(session)
-                    Pair(created, orders)
+                    Pair(order, orders)
                 }
                 _uiState.update { it.copy(orders = updatedOrders) }
-                onSuccess("Zamówienie #${createdOrder.id} zostało pomyślnie utworzone.")
+                onSuccess("Zamówienie #${created.id} zostało utworzone.")
             } catch (exception: Exception) {
                 Log.e("FurnitureViewModel", "Błąd tworzenia zamówienia", exception)
                 val userMsg = exception.toUserMessage()
@@ -264,20 +291,20 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         }
         viewModelScope.launch {
             try {
-                val (updatedOrder, updatedOrders) = withContext(Dispatchers.IO) {
-                    val updated = api.updateOrder(id, request, session)
+                val (updated, updatedOrders) = withContext(Dispatchers.IO) {
+                    val order = api.updateOrder(id, request, session)
                     val orders = fetchOrders(session)
-                    Pair(updated, orders)
+                    Pair(order, orders)
                 }
                 _uiState.update {
                     it.copy(
                         orders = updatedOrders,
-                        selectedOrder = if (it.selectedOrder?.id == id) updatedOrder else it.selectedOrder,
+                        selectedOrder = if (it.selectedOrder?.id == id) updated else it.selectedOrder,
                     )
                 }
-                onSuccess("Zamówienie #${updatedOrder.id} zostało pomyślnie zaktualizowane.")
+                onSuccess("Zamówienie #$id zostało zaktualizowane.")
             } catch (exception: Exception) {
-                Log.e("FurnitureViewModel", "Błąd aktualizacji zamówienia", exception)
+                Log.e("FurnitureViewModel", "Błąd edycji zamówienia", exception)
                 val userMsg = exception.toUserMessage()
                 if (exception is ApiException && exception.statusCode == 401) {
                     handleAuthorizedError(exception)
@@ -386,7 +413,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun logout() {
         sessionStore.clear()
-        _uiState.value = FurnitureUiState(initialized = true)
+        _uiState.value = FurnitureUiState(initialized = true, serverUrl = currentServerUrl)
     }
 
     fun clearError() {
@@ -426,6 +453,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
             sessionStore.clear()
             _uiState.value = FurnitureUiState(
                 initialized = true,
+                serverUrl = currentServerUrl,
                 error = "Sesja wygasła. Zaloguj się ponownie.",
             )
         } else {

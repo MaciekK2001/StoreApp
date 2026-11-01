@@ -114,28 +114,8 @@ fun OrderDetails(
                                     fontWeight = FontWeight.Bold,
                                     color = if (order.active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onErrorContainer,
                                 )
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = if (order.active) {
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                    } else {
-                                        MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
-                                    },
-                                ) {
-                                    Text(
-                                        text = if (order.active) "W realizacji" else "Zakończone",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (order.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    )
-                                }
                             }
-                            Text(
-                                text = if (order.active) "Zamówienie widoczne jako aktywne" else "Zamówienie oznaczone jako nieaktywne",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+
                         }
                     }
 

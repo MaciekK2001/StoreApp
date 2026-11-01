@@ -7,8 +7,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import produkcja.meble.app.dto.ProductRequest;
 import produkcja.meble.app.dto.ProductResponse;
 import produkcja.meble.app.entity.UserAccount;
@@ -17,11 +19,16 @@ import produkcja.meble.app.service.JwtService;
 import produkcja.meble.app.service.ProductService;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -125,5 +132,44 @@ class ProductControllerTest {
     void unauthenticatedRequestReturnsUnauthorized() throws Exception {
         mockMvc.perform(get("/api/products"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void uploadAndRetrieveImageStoredInDatabase() throws Exception {
+        byte[] testImageContent = new byte[]{1, 2, 3, 4, 5, 6, 7, 8};
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "test-sofa.jpg",
+                MediaType.IMAGE_JPEG_VALUE,
+                testImageContent
+        );
+
+        MvcResult uploadResult = mockMvc.perform(multipart("/api/products/images")
+                        .file(file)
+                        .header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imageUrl").isString())
+                .andReturn();
+
+        String responseJson = uploadResult.getResponse().getContentAsString();
+        @SuppressWarnings("unchecked")
+        Map<String, String> body = objectMapper.readValue(responseJson, Map.class);
+        String imageUrl = body.get("imageUrl");
+        assertNotNull(imageUrl);
+
+        // GET bez autoryzacji (zdjęcia są publiczne, np. dla Coil w Androidzie)
+        MvcResult imageGetResult = mockMvc.perform(get(imageUrl))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.IMAGE_JPEG))
+                .andExpect(header().string("Cache-Control", "public, max-age=86400"))
+                .andReturn();
+
+        assertArrayEquals(testImageContent, imageGetResult.getResponse().getContentAsByteArray());
+    }
+
+    @Test
+    void getImageNotFoundReturns404() throws Exception {
+        mockMvc.perform(get("/api/products/images/nonexistent-image.jpg"))
+                .andExpect(status().isNotFound());
     }
 }

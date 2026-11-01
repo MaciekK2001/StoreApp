@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
 
 private val LightColors = lightColorScheme(
@@ -25,8 +26,23 @@ private val DarkColors = darkColorScheme(
     primaryContainer = Color(0xFF71371F),
     secondary = Color(0xFFDEC2B3),
     background = Color(0xFF1A110E),
-    surface = Color(0xFF1A110E),
+    surface = Color(0xFF241814),
+    surfaceVariant = Color(0xFF35241D),
 )
+
+/**
+ * Kolory tła dla zakładki produktów:
+ * - Jasny motyw: ciepły piaskowy beż (odcień jasnego drewna), wyraźnie odróżniający się od kremowo-białego tła zamówień.
+ * - Ciemny motyw: ciepły, głęboki odcień palonego drewna / espresso.
+ */
+val ProductListBackgroundLight = Color(0xFFF0E5DA)
+val ProductListBackgroundDark = Color(0xFF1E1410)
+
+@Composable
+@ReadOnlyComposable
+fun productListBackgroundColor(darkTheme: Boolean = isSystemInDarkTheme()): Color {
+    return if (darkTheme) ProductListBackgroundDark else ProductListBackgroundLight
+}
 
 @Composable
 fun MebleMobileTheme(
