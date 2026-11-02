@@ -31,7 +31,7 @@ class ApiClient(private val baseUrl: String) {
     }
 
     fun getActiveOrders(session: AuthSession): List<FurnitureOrder> {
-        val response = sendJson("GET", "/api/orders?active=true", null, session.authorizationHeader)
+        val response = sendJson("GET", "/api/orders/active", null, session.authorizationHeader)
         return parseArray(response, ::parseOrder)
     }
 

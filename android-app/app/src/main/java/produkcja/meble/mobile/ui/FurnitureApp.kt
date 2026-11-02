@@ -1,8 +1,12 @@
 package produkcja.meble.mobile.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,12 +25,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,6 +43,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -55,6 +62,8 @@ import produkcja.meble.mobile.ui.orders.OrderFormDialog
 import produkcja.meble.mobile.ui.orders.OrderList
 import produkcja.meble.mobile.ui.products.ProductFormDialog
 import produkcja.meble.mobile.ui.products.ProductList
+import produkcja.meble.mobile.ui.theme.orderSectionStyle
+import produkcja.meble.mobile.ui.theme.productSectionStyle
 
 @Composable
 fun FurnitureApp(viewModel: FurnitureViewModel) {
@@ -124,6 +133,28 @@ private fun Dashboard(
     val selectedOrder = state.selectedOrder
     val coroutineScope = rememberCoroutineScope()
 
+    val isDark = isSystemInDarkTheme()
+    val productStyle = productSectionStyle(isDark)
+    val orderStyle = orderSectionStyle(isDark)
+    val activeSectionStyle = when {
+        selectedOrder != null -> orderStyle
+        state.section == MainSection.ORDERS -> orderStyle
+        else -> productStyle
+    }
+
+    val topBarContainerColor by animateColorAsState(
+        targetValue = activeSectionStyle.topBarContainer,
+        label = "top-bar-container",
+    )
+    val topBarContentColor by animateColorAsState(
+        targetValue = activeSectionStyle.topBarContent,
+        label = "top-bar-content",
+    )
+    val navBarContainerColor by animateColorAsState(
+        targetValue = activeSectionStyle.topBarContainer,
+        label = "nav-bar-container",
+    )
+
     var showAddProductDialog by rememberSaveable { mutableStateOf(false) }
     var showCreateOrderDialog by rememberSaveable { mutableStateOf(false) }
 
@@ -155,33 +186,76 @@ private fun Dashboard(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(if (selectedOrder == null) "Meble" else "Zamówienie #${selectedOrder.id}")
-                        if (selectedOrder == null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            imageVector = when {
+                                selectedOrder != null -> Icons.AutoMirrored.Filled.ReceiptLong
+                                state.section == MainSection.PRODUCTS -> Icons.Default.Chair
+                                else -> Icons.AutoMirrored.Filled.ReceiptLong
+                            },
+                            contentDescription = null,
+                            tint = activeSectionStyle.primary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Column {
                             Text(
-                                text = state.session?.user?.username.orEmpty(),
-                                style = MaterialTheme.typography.labelMedium,
+                                text = when {
+                                    selectedOrder != null -> "Zamówienie #${selectedOrder.id}"
+                                    state.section == MainSection.PRODUCTS -> "Katalog mebli"
+                                    else -> "Zamówienia klientów"
+                                },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = topBarContentColor,
                             )
+                            if (selectedOrder == null) {
+                                Text(
+                                    text = state.session?.user?.username?.let { "Użytkownik: $it" }.orEmpty(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = topBarContentColor.copy(alpha = 0.75f),
+                                )
+                            }
                         }
                     }
                 },
                 navigationIcon = {
                     if (selectedOrder != null) {
                         IconButton(onClick = onCloseOrder) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Wróć")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Wróć",
+                                tint = activeSectionStyle.primary,
+                            )
                         }
                     }
                 },
                 actions = {
                     if (selectedOrder == null) {
                         IconButton(onClick = onRefresh, enabled = !state.loading) {
-                            Icon(Icons.Default.Refresh, "Odśwież")
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Odśwież",
+                                tint = activeSectionStyle.primary,
+                            )
                         }
                         IconButton(onClick = onLogout) {
-                            Icon(Icons.AutoMirrored.Filled.Logout, "Wyloguj")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Logout,
+                                contentDescription = "Wyloguj",
+                                tint = activeSectionStyle.primary,
+                            )
                         }
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = topBarContainerColor,
+                    titleContentColor = topBarContentColor,
+                    actionIconContentColor = activeSectionStyle.primary,
+                    navigationIconContentColor = activeSectionStyle.primary,
+                ),
             )
         },
         floatingActionButton = {
@@ -190,8 +264,8 @@ private fun Dashboard(
                     MainSection.PRODUCTS -> {
                         FloatingActionButton(
                             onClick = { showAddProductDialog = true },
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            containerColor = productStyle.fabColor,
+                            contentColor = productStyle.fabContentColor,
                         ) {
                             Icon(Icons.Default.Add, contentDescription = "Dodaj mebel")
                         }
@@ -199,8 +273,8 @@ private fun Dashboard(
                     MainSection.ORDERS -> {
                         FloatingActionButton(
                             onClick = { showCreateOrderDialog = true },
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            containerColor = orderStyle.fabColor,
+                            contentColor = orderStyle.fabContentColor,
                         ) {
                             Icon(Icons.Default.Add, contentDescription = "Nowe zamówienie")
                         }
@@ -210,18 +284,45 @@ private fun Dashboard(
         },
         bottomBar = {
             if (selectedOrder == null) {
-                NavigationBar {
+                NavigationBar(
+                    containerColor = navBarContainerColor,
+                    tonalElevation = 6.dp,
+                ) {
                     NavigationBarItem(
                         selected = state.section == MainSection.PRODUCTS,
                         onClick = { onSectionSelected(MainSection.PRODUCTS) },
                         icon = { Icon(Icons.Default.Chair, null) },
-                        label = { Text("Produkty") },
+                        label = {
+                            Text(
+                                "Produkty",
+                                fontWeight = if (state.section == MainSection.PRODUCTS) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = productStyle.primary,
+                            selectedTextColor = productStyle.primary,
+                            indicatorColor = productStyle.navIndicatorColor,
+                            unselectedIconColor = activeSectionStyle.primary.copy(alpha = 0.5f),
+                            unselectedTextColor = activeSectionStyle.primary.copy(alpha = 0.7f),
+                        ),
                     )
                     NavigationBarItem(
                         selected = state.section == MainSection.ORDERS,
                         onClick = { onSectionSelected(MainSection.ORDERS) },
                         icon = { Icon(Icons.AutoMirrored.Filled.ReceiptLong, null) },
-                        label = { Text("Zamówienia") },
+                        label = {
+                            Text(
+                                "Zamówienia",
+                                fontWeight = if (state.section == MainSection.ORDERS) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = orderStyle.primary,
+                            selectedTextColor = orderStyle.primary,
+                            indicatorColor = orderStyle.navIndicatorColor,
+                            unselectedIconColor = activeSectionStyle.primary.copy(alpha = 0.5f),
+                            unselectedTextColor = activeSectionStyle.primary.copy(alpha = 0.7f),
+                        ),
                     )
                 }
             }

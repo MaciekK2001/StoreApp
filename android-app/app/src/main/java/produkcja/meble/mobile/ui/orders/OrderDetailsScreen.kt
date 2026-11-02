@@ -6,12 +6,15 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,7 +38,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -45,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import produkcja.meble.mobile.data.FurnitureOrder
@@ -54,6 +57,9 @@ import produkcja.meble.mobile.ui.common.OptionalDetailRow
 import produkcja.meble.mobile.ui.common.dateTime
 import produkcja.meble.mobile.ui.common.isMeaningful
 import produkcja.meble.mobile.ui.common.money
+import produkcja.meble.mobile.ui.theme.SectionStyle
+import produkcja.meble.mobile.ui.theme.orderListBackgroundColor
+import produkcja.meble.mobile.ui.theme.orderSectionStyle
 
 @Composable
 fun OrderDetails(
@@ -62,6 +68,10 @@ fun OrderDetails(
     onDeleteOrder: ((FurnitureOrder) -> Unit)? = null,
     onToggleStatus: ((FurnitureOrder, Boolean) -> Unit)? = null,
 ) {
+    val isDark = isSystemInDarkTheme()
+    val orderStyle = orderSectionStyle(isDark)
+    val backgroundColor = orderListBackgroundColor(isDark)
+
     val itemsTotal = order.items.sumOf { it.price * it.quantity }
     val servicesTotal = order.assemblyPrice + order.transportPrice + order.carryProductsPrice
     val subtotalBeforeDiscount = itemsTotal + servicesTotal
@@ -71,18 +81,25 @@ fun OrderDetails(
     LazyColumn(
         contentPadding = PaddingValues(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(backgroundColor),
     ) {
         // Status Card
         item {
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = if (order.active) {
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                        orderStyle.container.copy(alpha = 0.65f)
                     } else {
                         MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
                     },
                 ),
                 shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(
+                    1.dp,
+                    if (order.active) orderStyle.cardBorder else MaterialTheme.colorScheme.error.copy(alpha = 0.3f),
+                ),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(
@@ -100,7 +117,7 @@ fun OrderDetails(
                         Icon(
                             imageVector = if (order.active) Icons.Default.CheckCircle else Icons.Default.PauseCircle,
                             contentDescription = null,
-                            tint = if (order.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            tint = if (order.active) orderStyle.primary else MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(28.dp),
                         )
                         Column {
@@ -112,10 +129,9 @@ fun OrderDetails(
                                     text = if (order.active) "Status: Aktywne" else "Status: Nieaktywne",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (order.active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onErrorContainer,
+                                    color = if (order.active) orderStyle.onContainer else MaterialTheme.colorScheme.onErrorContainer,
                                 )
                             }
-
                         }
                     }
 
@@ -129,8 +145,8 @@ fun OrderDetails(
                                 )
                             } else {
                                 ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    containerColor = orderStyle.primary,
+                                    contentColor = Color.White,
                                 )
                             },
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
@@ -149,9 +165,10 @@ fun OrderDetails(
 
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        containerColor = orderStyle.cardBackground,
                     ),
                     shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, orderStyle.cardBorder),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -170,19 +187,20 @@ fun OrderDetails(
                                 Icon(
                                     imageVector = Icons.Default.Tune,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = orderStyle.primary,
                                     modifier = Modifier.size(20.dp),
                                 )
                                 Text(
                                     text = if (isActionsExpanded) "Zwiń opcje zarządzania" else "Opcje zarządzania zamówieniem",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.SemiBold,
+                                    color = orderStyle.primary,
                                 )
                             }
                             Icon(
                                 imageVector = if (isActionsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = orderStyle.primary,
                             )
                         }
 
@@ -194,7 +212,7 @@ fun OrderDetails(
                             Column {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(vertical = 12.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                    color = orderStyle.cardBorder.copy(alpha = 0.5f),
                                 )
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -204,6 +222,9 @@ fun OrderDetails(
                                         OutlinedButton(
                                             onClick = { onEditOrder(order) },
                                             modifier = Modifier.weight(1f),
+                                            colors = ButtonDefaults.outlinedButtonColors(
+                                                contentColor = orderStyle.primary,
+                                            ),
                                         ) {
                                             Icon(
                                                 Icons.Default.Edit,
@@ -241,7 +262,7 @@ fun OrderDetails(
         }
 
         item {
-            DetailsCard("Dostawa") {
+            DetailsCard("Dostawa", orderStyle) {
                 DetailRow("Termin", dateTime(order.deliveryDate))
                 DetailRow("Adres", order.address)
                 DetailRow("Telefon", order.phoneNumber)
@@ -258,15 +279,16 @@ fun OrderDetails(
                     text = "Produkty",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
+                    color = orderStyle.primary,
                 )
             }
             items(order.items, key = { "${it.id}-${it.product?.id}" }) { item ->
-                OrderItemCard(item)
+                OrderItemCard(item, orderStyle)
             }
         }
 
         item {
-            DetailsCard("Rozliczenie") {
+            DetailsCard("Rozliczenie", orderStyle) {
                 DetailRow("Wartość produktów", money(itemsTotal))
                 OptionalDetailRow("Montaż", order.assemblyPrice, order.assemblyRemarks)
                 OptionalDetailRow("Transport", order.transportPrice, order.transportRemarks)
@@ -289,7 +311,7 @@ fun OrderDetails(
 
         if (meaningfulRemarks.isNotEmpty()) {
             item {
-                DetailsCard("Uwagi") {
+                DetailsCard("Uwagi", orderStyle) {
                     meaningfulRemarks.forEach { (label, text) ->
                         DetailRow(label, text.trim())
                     }
@@ -300,11 +322,12 @@ fun OrderDetails(
 }
 
 @Composable
-private fun OrderItemCard(item: OrderItem) {
+private fun OrderItemCard(item: OrderItem, orderStyle: SectionStyle) {
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            containerColor = orderStyle.cardBackground,
         ),
+        border = BorderStroke(1.dp, orderStyle.cardBorder),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
@@ -333,29 +356,31 @@ private fun OrderItemCard(item: OrderItem) {
                 text = money(item.price * item.quantity),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
+                color = orderStyle.primary,
             )
         }
     }
 }
 
 @Composable
-private fun DetailsCard(title: String, content: @Composable () -> Unit) {
+private fun DetailsCard(title: String, orderStyle: SectionStyle, content: @Composable () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            containerColor = orderStyle.cardBackground,
         ),
+        border = BorderStroke(1.dp, orderStyle.cardBorder),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
+                color = orderStyle.primary,
             )
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 10.dp),
-                color = MaterialTheme.colorScheme.outlineVariant,
+                color = orderStyle.cardBorder.copy(alpha = 0.6f),
             )
             content()
         }

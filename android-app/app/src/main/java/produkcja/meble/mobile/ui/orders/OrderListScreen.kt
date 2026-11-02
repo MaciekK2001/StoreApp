@@ -6,7 +6,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -36,6 +38,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -57,6 +61,8 @@ import produkcja.meble.mobile.data.FurnitureOrder
 import produkcja.meble.mobile.ui.common.EmptyState
 import produkcja.meble.mobile.ui.common.date
 import produkcja.meble.mobile.ui.common.isMeaningful
+import produkcja.meble.mobile.ui.theme.orderListBackgroundColor
+import produkcja.meble.mobile.ui.theme.orderSectionStyle
 
 @Composable
 fun OrderList(
@@ -68,7 +74,23 @@ fun OrderList(
     onDeleteOrder: ((FurnitureOrder) -> Unit)? = null,
     onToggleStatus: ((FurnitureOrder, Boolean) -> Unit)? = null,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
+    val isDark = isSystemInDarkTheme()
+    val orderStyle = orderSectionStyle(isDark)
+    val backgroundColor = orderListBackgroundColor(isDark)
+
+    val displayedOrders = remember(orders, showOnlyActive) {
+        if (showOnlyActive) {
+            orders.filter { it.active }
+        } else {
+            orders
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(backgroundColor),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -83,6 +105,11 @@ fun OrderList(
                 leadingIcon = if (showOnlyActive) {
                     { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                 } else null,
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = orderStyle.container,
+                    selectedLabelColor = orderStyle.onContainer,
+                    selectedLeadingIconColor = orderStyle.primary,
+                ),
             )
             FilterChip(
                 selected = !showOnlyActive,
@@ -91,10 +118,15 @@ fun OrderList(
                 leadingIcon = if (!showOnlyActive) {
                     { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                 } else null,
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = orderStyle.container,
+                    selectedLabelColor = orderStyle.onContainer,
+                    selectedLeadingIconColor = orderStyle.primary,
+                ),
             )
         }
 
-        if (orders.isEmpty()) {
+        if (displayedOrders.isEmpty()) {
             val emptyTitle = if (showOnlyActive) "Brak aktywnych zamówień" else "Brak zamówień"
             val emptyDesc = if (showOnlyActive) "Nowe aktywne zamówienia pojawią się tutaj." else "Baza zamówień jest pusta."
             EmptyState(emptyTitle, emptyDesc)
@@ -104,15 +136,17 @@ fun OrderList(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                items(orders, key = FurnitureOrder::id) { order ->
+                items(displayedOrders, key = FurnitureOrder::id) { order ->
                     var isActionsExpanded by rememberSaveable { mutableStateOf(false) }
 
                     Card(
                         onClick = { onOrderSelected(order) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            containerColor = orderStyle.cardBackground,
                         ),
+                        border = BorderStroke(1.dp, orderStyle.cardBorder),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                     ) {
                         Column(modifier = Modifier.padding(18.dp)) {
                             Row(
@@ -130,7 +164,20 @@ fun OrderList(
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                     )
-                                    if (!order.active) {
+                                    if (order.active) {
+                                        Surface(
+                                            color = orderStyle.container,
+                                            shape = MaterialTheme.shapes.extraSmall,
+                                        ) {
+                                            Text(
+                                                text = "Aktywne",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = orderStyle.onContainer,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                        }
+                                    } else {
                                         Surface(
                                             color = MaterialTheme.colorScheme.errorContainer,
                                             shape = MaterialTheme.shapes.extraSmall,
@@ -152,8 +199,8 @@ fun OrderList(
                                 ) {
                                     Text(
                                         text = date(order.deliveryDate),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.SemiBold,
+                                        color = orderStyle.primary,
+                                        fontWeight = FontWeight.Bold,
                                     )
                                     if (onToggleStatus != null || onEditOrder != null || onDeleteOrder != null) {
                                         IconButton(
@@ -186,12 +233,12 @@ fun OrderList(
                                     imageVector = Icons.Default.Person,
                                     contentDescription = "Dodał",
                                     modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = orderStyle.primary,
                                 )
                                 Text(
                                     text = "Dodał(a): ${creatorUsername ?: "Nieznany"}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = orderStyle.primary,
                                     fontWeight = FontWeight.Medium,
                                 )
                             }
@@ -225,20 +272,20 @@ fun OrderList(
                                         Icon(
                                             imageVector = Icons.Default.Tune,
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
+                                            tint = orderStyle.primary,
                                             modifier = Modifier.size(16.dp),
                                         )
                                         Text(
                                             text = if (isActionsExpanded) "Zwiń akcje" else "Rozwiń akcje",
                                             style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.primary,
+                                            color = orderStyle.primary,
                                         )
                                     }
                                     Icon(
                                         imageVector = if (isActionsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = orderStyle.primary,
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
@@ -264,7 +311,7 @@ fun OrderList(
                                                     )
                                                 } else {
                                                     ButtonDefaults.outlinedButtonColors(
-                                                        contentColor = MaterialTheme.colorScheme.primary,
+                                                        contentColor = orderStyle.primary,
                                                     )
                                                 },
                                                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),

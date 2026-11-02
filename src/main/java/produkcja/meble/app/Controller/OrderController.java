@@ -34,9 +34,10 @@ public class OrderController {
 
     @GetMapping
     public ResponseEntity<List<OrderResponse>> getOrders(
-            @RequestParam(required = false, defaultValue = "false") boolean activeOnly
+            @RequestParam(required = false, defaultValue = "false") boolean activeOnly,
+            @RequestParam(required = false) Boolean active
     ) {
-        if (activeOnly) {
+        if (activeOnly || Boolean.TRUE.equals(active)) {
             return ResponseEntity.ok(orderService.findAllActiveOrders());
         }
         return ResponseEntity.ok(orderService.findAllOrders());
