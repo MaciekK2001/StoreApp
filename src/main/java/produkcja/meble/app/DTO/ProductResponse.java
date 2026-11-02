@@ -3,6 +3,7 @@ package produkcja.meble.app.dto;
 import lombok.Builder;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Builder
 public record ProductResponse(
@@ -18,6 +19,7 @@ public record ProductResponse(
         String fabric,
         String remarks,
         String equipment,
-        String imageUrl
+        String imageUrl,
+        List<String> additionalImages
 ) {
 }

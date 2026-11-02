@@ -8,6 +8,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "product")
@@ -48,4 +50,11 @@ public class Product {
     private String equipment;
 
     private String imageUrl;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "product_additional_images", joinColumns = @JoinColumn(name = "product_id"))
+    @Column(name = "image_url")
+    @OrderColumn(name = "image_order")
+    @Builder.Default
+    private List<String> additionalImages = new ArrayList<>();
 }

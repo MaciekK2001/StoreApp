@@ -7,7 +7,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,14 +22,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -42,6 +48,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -68,13 +75,20 @@ import produkcja.meble.mobile.ui.common.resolveImageUrl
 fun ProductCard(
     product: Product,
     modifier: Modifier = Modifier,
-    onImageClick: ((url: String, title: String) -> Unit)? = null,
+    onImageClick: ((images: List<String>, initialIndex: Int, title: String) -> Unit)? = null,
     onEditClick: (() -> Unit)? = null,
     onDeleteClick: (() -> Unit)? = null,
 ) {
     val displayModel = product.model.ifBlank { "Mebel #${product.id}" }
-    val hasImage = product.imageUrl.isMeaningful()
+    val allImages = product.allImages
+    var selectedImageIndex by rememberSaveable(product.id, allImages) { mutableIntStateOf(0) }
     var isActionsExpanded by rememberSaveable { mutableStateOf(false) }
+
+    val safeIndex = if (allImages.isNotEmpty()) {
+        selectedImageIndex.coerceIn(0, allImages.lastIndex)
+    } else {
+        0
+    }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -84,10 +98,11 @@ fun ProductCard(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
-        if (hasImage) {
+        if (allImages.isNotEmpty()) {
             val context = LocalContext.current
-            val resolvedUrl = remember(product.imageUrl) {
-                resolveImageUrl(product.imageUrl) ?: product.imageUrl!!
+            val currentRawUrl = allImages[safeIndex]
+            val resolvedUrl = remember(currentRawUrl) {
+                resolveImageUrl(currentRawUrl) ?: currentRawUrl
             }
             val imageRequest = remember(resolvedUrl) {
                 ImageRequest.Builder(context)
@@ -102,7 +117,7 @@ fun ProductCard(
                     .height(220.dp)
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                     .clickable(enabled = onImageClick != null) {
-                        onImageClick?.invoke(resolvedUrl, displayModel)
+                        onImageClick?.invoke(allImages, safeIndex, displayModel)
                     },
                 contentAlignment = Alignment.Center,
             ) {
@@ -146,17 +161,137 @@ fun ProductCard(
                     },
                 )
 
+                // Etykieta w lewym górnym rogu (główne lub dodatkowe)
                 Surface(
                     shape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
                     modifier = Modifier.align(Alignment.TopStart),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        if (safeIndex == 0) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(12.dp),
+                            )
+                            Text(
+                                text = "Główne",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        } else {
+                            Text(
+                                text = "Zdjęcie ${safeIndex + 1}/${allImages.size}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                // Licznik zdjęć w prawym górnym rogu (jeśli więcej niż 1)
+                if (allImages.size > 1) {
+                    Surface(
+                        shape = RoundedCornerShape(bottomStart = 8.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
+                        modifier = Modifier.align(Alignment.TopEnd),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Collections,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Text(
+                                text = "${safeIndex + 1} / ${allImages.size}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                // Etykieta w dolnym rogu
+                Surface(
+                    shape = RoundedCornerShape(topStart = 8.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    modifier = Modifier.align(Alignment.BottomEnd),
                 ) {
                     Text(
                         text = "Kliknij, aby powiększyć",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                     )
+                }
+            }
+
+            // Pasek miniaturek gdy mebel posiada więcej niż 1 zdjęcie
+            if (allImages.size > 1) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    allImages.forEachIndexed { idx, url ->
+                        val isSelected = idx == safeIndex
+                        val thumbResolved = remember(url) { resolveImageUrl(url) ?: url }
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(8.dp),
+                                )
+                                .clickable { selectedImageIndex = idx },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            SubcomposeAsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(thumbResolved)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "Miniatura ${idx + 1}",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            if (idx == 0) {
+                                Surface(
+                                    shape = RoundedCornerShape(bottomEnd = 4.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.align(Alignment.TopStart),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = "Główne",
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier
+                                            .padding(2.dp)
+                                            .size(9.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -19,6 +19,7 @@ import produkcja.meble.app.service.JwtService;
 import produkcja.meble.app.service.ProductService;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -84,6 +85,39 @@ class ProductControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(header().exists("Location"))
                 .andExpect(jsonPath("$.model").value("Fotel Relax"));
+    }
+
+    @Test
+    void createProductWithAdditionalImagesReturnsImagesList() throws Exception {
+        ProductRequest request = ProductRequest.builder()
+                .price(BigDecimal.valueOf(2500))
+                .model("Komoda Dębowa")
+                .length(120)
+                .height(90)
+                .depth(45)
+                .imageUrl("/api/products/images/main.jpg")
+                .additionalImages(List.of("/api/products/images/side.jpg", "/api/products/images/inside.jpg"))
+                .build();
+
+        MvcResult result = mockMvc.perform(post("/api/products")
+                        .header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.imageUrl").value("/api/products/images/main.jpg"))
+                .andExpect(jsonPath("$.additionalImages.length()").value(2))
+                .andExpect(jsonPath("$.additionalImages[0]").value("/api/products/images/side.jpg"))
+                .andExpect(jsonPath("$.additionalImages[1]").value("/api/products/images/inside.jpg"))
+                .andReturn();
+
+        String responseJson = result.getResponse().getContentAsString();
+        ProductResponse created = objectMapper.readValue(responseJson, ProductResponse.class);
+
+        mockMvc.perform(get("/api/products/" + created.id())
+                        .header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imageUrl").value("/api/products/images/main.jpg"))
+                .andExpect(jsonPath("$.additionalImages.length()").value(2));
     }
 
     @Test

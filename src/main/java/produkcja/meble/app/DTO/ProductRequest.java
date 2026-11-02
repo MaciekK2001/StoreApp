@@ -6,6 +6,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Builder;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Builder
 public record ProductRequest(
@@ -37,6 +38,8 @@ public record ProductRequest(
 
         String equipment,
 
-        String imageUrl
+        String imageUrl,
+
+        List<String> additionalImages
 ) {
 }

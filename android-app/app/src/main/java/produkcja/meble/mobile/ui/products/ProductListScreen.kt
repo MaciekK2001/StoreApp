@@ -33,7 +33,8 @@ import produkcja.meble.mobile.ui.theme.MebleMobileTheme
 import produkcja.meble.mobile.ui.theme.productListBackgroundColor
 
 private data class FullScreenImageData(
-    val imageUrl: String,
+    val images: List<String>,
+    val initialIndex: Int,
     val title: String,
 )
 
@@ -160,8 +161,8 @@ fun ProductList(
                 Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                     ProductCard(
                         product = product,
-                        onImageClick = { imageUrl, title ->
-                            fullScreenImage = FullScreenImageData(imageUrl = imageUrl, title = title)
+                        onImageClick = { images, initialIndex, title ->
+                            fullScreenImage = FullScreenImageData(images = images, initialIndex = initialIndex, title = title)
                         },
                         onEditClick = onEditProduct?.let { { it(product) } },
                         onDeleteClick = onDeleteProduct?.let { { it(product) } },
@@ -173,7 +174,8 @@ fun ProductList(
 
     fullScreenImage?.let { data ->
         FullScreenImageDialog(
-            imageUrl = data.imageUrl,
+            images = data.images,
+            initialIndex = data.initialIndex,
             title = data.title,
             onDismiss = { fullScreenImage = null },
         )

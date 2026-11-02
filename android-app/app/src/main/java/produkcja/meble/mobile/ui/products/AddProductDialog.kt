@@ -21,10 +21,12 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -46,6 +48,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -91,6 +94,11 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 
+private sealed interface ExtraImageItem {
+    data class Remote(val url: String) : ExtraImageItem
+    data class Local(val bytes: ByteArray) : ExtraImageItem
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProductFormDialog(
@@ -101,6 +109,7 @@ fun ProductFormDialog(
         imageBytes: ByteArray?,
         fileName: String?,
         mimeType: String?,
+        additionalImagesBytes: List<ByteArray>,
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit,
     ) -> Unit,
@@ -135,10 +144,20 @@ fun ProductFormDialog(
     var equipment by rememberSaveable { mutableStateOf(initialProduct?.equipment.orEmpty()) }
     var remarks by rememberSaveable { mutableStateOf(initialProduct?.remarks.orEmpty()) }
 
-    var existingImageUrl by rememberSaveable { mutableStateOf(initialProduct?.imageUrl) }
-    var selectedImageBytes by remember { mutableStateOf<ByteArray?>(null) }
+    // Główne zdjęcie
+    var existingMainImageUrl by rememberSaveable { mutableStateOf(initialProduct?.imageUrl) }
+    var selectedMainImageBytes by remember { mutableStateOf<ByteArray?>(null) }
+
+    // Dodatkowe zdjęcia
+    var extraImages by remember {
+        mutableStateOf<List<ExtraImageItem>>(
+            initialProduct?.additionalImages?.map { ExtraImageItem.Remote(it) } ?: emptyList()
+        )
+    }
+
     var tempCameraFile by remember { mutableStateOf<File?>(null) }
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var cameraTargetIsMain by remember { mutableStateOf(true) }
 
     var attemptedSubmit by rememberSaveable { mutableStateOf(false) }
     var isSaving by rememberSaveable { mutableStateOf(false) }
@@ -156,7 +175,13 @@ fun ProductFormDialog(
         if (success && tempCameraFile != null) {
             val raw = readBytesFromFile(tempCameraFile!!)
             if (raw != null && raw.isNotEmpty()) {
-                selectedImageBytes = processImageBytes(raw)
+                val processed = processImageBytes(raw)
+                if (cameraTargetIsMain) {
+                    selectedMainImageBytes = processed
+                    existingMainImageUrl = null
+                } else {
+                    extraImages = extraImages + ExtraImageItem.Local(processed)
+                }
                 apiErrorMessage = null
             } else {
                 apiErrorMessage = "Nie udało się odczytać zdjęcia z aparatu."
@@ -164,16 +189,42 @@ fun ProductFormDialog(
         }
     }
 
-    val galleryLauncher = rememberLauncherForActivityResult(
+    // Wybór pojedynczego zdjęcia dla zdjęcia głównego
+    val mainGalleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
         if (uri != null) {
             val raw = readBytesFromUri(context, uri)
             if (raw != null && raw.isNotEmpty()) {
-                selectedImageBytes = processImageBytes(raw)
+                selectedMainImageBytes = processImageBytes(raw)
+                existingMainImageUrl = null
                 apiErrorMessage = null
             } else {
                 apiErrorMessage = "Nie udało się otworzyć wybranego pliku z galerii."
+            }
+        }
+    }
+
+    // Wybór wielu zdjęć dla galerii dodatkowej
+    val extraGalleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(),
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            val newLocalItems = uris.mapNotNull { uri ->
+                val raw = readBytesFromUri(context, uri)
+                if (raw != null && raw.isNotEmpty()) {
+                    ExtraImageItem.Local(processImageBytes(raw))
+                } else null
+            }
+            if (newLocalItems.isNotEmpty()) {
+                // Jeśli nie ma zdjęcia głównego, pierwsze z wybranych ustawiamy jako główne
+                if (selectedMainImageBytes == null && existingMainImageUrl == null) {
+                    selectedMainImageBytes = newLocalItems.first().bytes
+                    extraImages = extraImages + newLocalItems.drop(1)
+                } else {
+                    extraImages = extraImages + newLocalItems
+                }
+                apiErrorMessage = null
             }
         }
     }
@@ -188,7 +239,8 @@ fun ProductFormDialog(
         }
     }
 
-    val onTakePhotoClick: () -> Unit = {
+    val launchCamera: (forMain: Boolean) -> Unit = { forMain ->
+        cameraTargetIsMain = forMain
         val (file, uri) = createTempPictureFileAndUri(context)
         tempCameraFile = file
         tempCameraUri = uri
@@ -202,12 +254,6 @@ fun ProductFormDialog(
         } else {
             cameraLauncher.launch(uri)
         }
-    }
-
-    val onPickGalleryClick: () -> Unit = {
-        galleryLauncher.launch(
-            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-        )
     }
 
     Dialog(
@@ -238,7 +284,7 @@ fun ProductFormDialog(
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
-                                text = if (isEditing) "Zaktualizuj dane produktu i zdjęcie" else "Wypełnij parametry i opcjonalnie dołącz zdjęcie",
+                                text = if (isEditing) "Zaktualizuj dane produktu i zdjęcia" else "Wypełnij parametry i dołącz zdjęcia produktu",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -291,7 +337,7 @@ fun ProductFormDialog(
                             }
                         }
 
-                        // Sekcja wyboru zdjęcia
+                        // Sekcja: ZDJĘCIE GŁÓWNE
                         Card(
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -299,30 +345,67 @@ fun ProductFormDialog(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Star,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                        Text(
+                                            text = "Zdjęcie główne",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                    if (selectedMainImageBytes != null || existingMainImageUrl != null) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                        ) {
+                                            Text(
+                                                text = if (selectedMainImageBytes != null) "Nowe" else "Zapisane",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                            )
+                                        }
+                                    }
+                                }
                                 Text(
-                                    text = "Zdjęcie produktu",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
+                                    text = "To zdjęcie będzie wyświetlane jako pierwsze na liście i miniaturkach.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 2.dp),
                                 )
-                                Spacer(Modifier.height(8.dp))
+                                Spacer(Modifier.height(10.dp))
 
-                                val imageToDisplay: Any? = selectedImageBytes ?: resolveImageUrl(existingImageUrl)
+                                val mainImageToDisplay: Any? = selectedMainImageBytes ?: resolveImageUrl(existingMainImageUrl)
 
-                                if (imageToDisplay != null) {
+                                if (mainImageToDisplay != null) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(200.dp)
+                                            .height(190.dp)
                                             .clip(RoundedCornerShape(12.dp))
                                             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                                         contentAlignment = Alignment.Center,
                                     ) {
                                         SubcomposeAsyncImage(
                                             model = ImageRequest.Builder(context)
-                                                .data(imageToDisplay)
+                                                .data(mainImageToDisplay)
                                                 .crossfade(true)
                                                 .build(),
-                                            contentDescription = "Wybrane zdjęcie",
+                                            contentDescription = "Zdjęcie główne",
                                             contentScale = ContentScale.Fit,
                                             modifier = Modifier
                                                 .fillMaxSize()
@@ -337,25 +420,10 @@ fun ProductFormDialog(
                                             },
                                         )
 
-                                        Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                                            modifier = Modifier
-                                                .align(Alignment.BottomStart)
-                                                .padding(8.dp),
-                                        ) {
-                                            Text(
-                                                text = if (selectedImageBytes != null) "Nowo wybrane" else "Aktualne zdjęcie",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Medium,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                            )
-                                        }
-
                                         IconButton(
                                             onClick = {
-                                                selectedImageBytes = null
-                                                existingImageUrl = null
+                                                selectedMainImageBytes = null
+                                                existingMainImageUrl = null
                                             },
                                             modifier = Modifier
                                                 .align(Alignment.TopEnd)
@@ -367,7 +435,7 @@ fun ProductFormDialog(
                                         ) {
                                             Icon(
                                                 Icons.Default.Delete,
-                                                contentDescription = "Usuń zdjęcie",
+                                                contentDescription = "Usuń zdjęcie główne",
                                                 tint = MaterialTheme.colorScheme.error,
                                             )
                                         }
@@ -377,7 +445,7 @@ fun ProductFormDialog(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(130.dp)
+                                            .height(115.dp)
                                             .clip(RoundedCornerShape(12.dp))
                                             .border(
                                                 width = 1.dp,
@@ -394,11 +462,11 @@ fun ProductFormDialog(
                                             Icon(
                                                 Icons.Default.AddAPhoto,
                                                 contentDescription = null,
-                                                modifier = Modifier.size(36.dp),
+                                                modifier = Modifier.size(32.dp),
                                                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                                             )
                                             Text(
-                                                text = "Brak zdjęcia (opcjonalne)",
+                                                text = "Brak zdjęcia głównego (opcjonalne)",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
@@ -412,27 +480,206 @@ fun ProductFormDialog(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 ) {
                                     OutlinedButton(
-                                        onClick = onTakePhotoClick,
+                                        onClick = { launchCamera(true) },
                                         modifier = Modifier.weight(1f),
                                         enabled = !isSaving,
                                     ) {
                                         Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(6.dp))
-                                        Text("Aparat")
+                                        Text(if (mainImageToDisplay != null) "Zmień (Aparat)" else "Aparat")
                                     }
                                     OutlinedButton(
-                                        onClick = onPickGalleryClick,
+                                        onClick = {
+                                            mainGalleryLauncher.launch(
+                                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                            )
+                                        },
                                         modifier = Modifier.weight(1f),
                                         enabled = !isSaving,
                                     ) {
                                         Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(6.dp))
-                                        Text("Galeria")
+                                        Text(if (mainImageToDisplay != null) "Zmień (Galeria)" else "Galeria")
                                     }
                                 }
                             }
                         }
 
+                        // Sekcja: DODATKOWE ZDJĘCIA (GALERIA)
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = "Dodatkowe zdjęcia (${extraImages.size})",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                                Text(
+                                    text = "Możesz dodać więcej zdjęć prezentujących szczegóły lub różne ujęcia mebla.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                                Spacer(Modifier.height(10.dp))
+
+                                if (extraImages.isNotEmpty()) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(rememberScrollState())
+                                            .padding(bottom = 8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        extraImages.forEachIndexed { index, item ->
+                                            val displayModel: Any? = when (item) {
+                                                is ExtraImageItem.Local -> item.bytes
+                                                is ExtraImageItem.Remote -> resolveImageUrl(item.url) ?: item.url
+                                            }
+
+                                            Card(
+                                                shape = RoundedCornerShape(12.dp),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                ),
+                                                modifier = Modifier.width(130.dp),
+                                            ) {
+                                                Column(modifier = Modifier.padding(6.dp)) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .height(95.dp)
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .background(MaterialTheme.colorScheme.surface),
+                                                        contentAlignment = Alignment.Center,
+                                                    ) {
+                                                        SubcomposeAsyncImage(
+                                                            model = ImageRequest.Builder(context)
+                                                                .data(displayModel)
+                                                                .crossfade(true)
+                                                                .build(),
+                                                            contentDescription = "Dodatkowe zdjęcie ${index + 1}",
+                                                            contentScale = ContentScale.Crop,
+                                                            modifier = Modifier.fillMaxSize(),
+                                                        )
+
+                                                        // Przycisk usuwania
+                                                        IconButton(
+                                                            onClick = {
+                                                                extraImages = extraImages.toMutableList().apply { removeAt(index) }
+                                                            },
+                                                            modifier = Modifier
+                                                                .align(Alignment.TopEnd)
+                                                                .padding(4.dp)
+                                                                .size(24.dp)
+                                                                .background(
+                                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                                                    CircleShape,
+                                                                ),
+                                                        ) {
+                                                            Icon(
+                                                                Icons.Default.Close,
+                                                                contentDescription = "Usuń zdjęcie",
+                                                                tint = MaterialTheme.colorScheme.error,
+                                                                modifier = Modifier.size(16.dp),
+                                                            )
+                                                        }
+                                                    }
+
+                                                    Spacer(Modifier.height(6.dp))
+
+                                                    // Przycisk "Ustaw jako główne"
+                                                    OutlinedButton(
+                                                        onClick = {
+                                                            // Zamień obecne główne z wybranym dodatkowym
+                                                            val currentMainItem: ExtraImageItem? = when {
+                                                                selectedMainImageBytes != null -> ExtraImageItem.Local(selectedMainImageBytes!!)
+                                                                existingMainImageUrl != null -> ExtraImageItem.Remote(existingMainImageUrl!!)
+                                                                else -> null
+                                                            }
+
+                                                            // Nowe główne
+                                                            when (item) {
+                                                                is ExtraImageItem.Local -> {
+                                                                    selectedMainImageBytes = item.bytes
+                                                                    existingMainImageUrl = null
+                                                                }
+                                                                is ExtraImageItem.Remote -> {
+                                                                    selectedMainImageBytes = null
+                                                                    existingMainImageUrl = item.url
+                                                                }
+                                                            }
+
+                                                            // Zaktualizuj listę dodatkowych
+                                                            val updated = extraImages.toMutableList()
+                                                            updated.removeAt(index)
+                                                            if (currentMainItem != null) {
+                                                                updated.add(0, currentMainItem)
+                                                            }
+                                                            extraImages = updated
+                                                        },
+                                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .height(30.dp),
+                                                    ) {
+                                                        Icon(
+                                                            Icons.Default.Star,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(12.dp),
+                                                        )
+                                                        Spacer(Modifier.width(4.dp))
+                                                        Text(
+                                                            text = "Główne",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { launchCamera(false) },
+                                        modifier = Modifier.weight(1f),
+                                        enabled = !isSaving,
+                                    ) {
+                                        Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("+ Aparat")
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            extraGalleryLauncher.launch(
+                                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                            )
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        enabled = !isSaving,
+                                    ) {
+                                        Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("+ Galeria (wiele)")
+                                    }
+                                }
+                            }
+                        }
+
+                        // Podstawowe informacje
                         Card(
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -508,6 +755,7 @@ fun ProductFormDialog(
                             }
                         }
 
+                        // Wymiary (cm)
                         Card(
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -569,6 +817,7 @@ fun ProductFormDialog(
                             }
                         }
 
+                        // Cechy mebla
                         Card(
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -657,6 +906,9 @@ fun ProductFormDialog(
                                     val parsedDepth = depth.trim().toDouble()
                                     val parsedHeight = height.trim().toDouble()
 
+                                    val remoteAdditionalUrls = extraImages.filterIsInstance<ExtraImageItem.Remote>().map { it.url }
+                                    val localAdditionalBytes = extraImages.filterIsInstance<ExtraImageItem.Local>().map { it.bytes }
+
                                     val request = CreateProductRequest(
                                         model = model.trim(),
                                         type = selectedType.name,
@@ -669,20 +921,22 @@ fun ProductFormDialog(
                                         material = material.trim(),
                                         equipment = equipment.trim(),
                                         remarks = remarks.trim(),
-                                        imageUrl = if (selectedImageBytes == null) existingImageUrl else null,
+                                        imageUrl = if (selectedMainImageBytes == null) existingMainImageUrl else null,
+                                        additionalImages = remoteAdditionalUrls,
                                     )
 
                                     val mimeType = "image/jpeg"
-                                    val fileName = "mebel_${System.currentTimeMillis()}.jpg"
+                                    val fileName = "mebel_main_${System.currentTimeMillis()}.jpg"
 
                                     apiErrorMessage = null
                                     isSaving = true
 
                                     onSave(
                                         request,
-                                        selectedImageBytes,
+                                        selectedMainImageBytes,
                                         fileName,
                                         mimeType,
+                                        localAdditionalBytes,
                                         /* onSuccess = */ {
                                             isSaving = false
                                             onDismiss()
@@ -731,8 +985,8 @@ fun ProductFormDialog(
                                     color = MaterialTheme.colorScheme.primary,
                                 )
                                 Text(
-                                    text = if (selectedImageBytes != null) {
-                                        "Wysyłanie zdjęcia i zapisywanie..."
+                                    text = if (selectedMainImageBytes != null || extraImages.any { it is ExtraImageItem.Local }) {
+                                        "Wysyłanie zdjęć i zapisywanie..."
                                     } else {
                                         "Zapisywanie produktu..."
                                     },
@@ -757,6 +1011,7 @@ fun AddProductDialog(
         imageBytes: ByteArray?,
         fileName: String?,
         mimeType: String?,
+        additionalImagesBytes: List<ByteArray>,
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit,
     ) -> Unit,

@@ -121,8 +121,8 @@ private fun Dashboard(
     onCloseOrder: () -> Unit,
     onRefresh: () -> Unit,
     onLogout: () -> Unit,
-    onCreateProduct: (CreateProductRequest, ByteArray?, String?, String?, (String) -> Unit, (String) -> Unit) -> Unit,
-    onUpdateProduct: (Long, CreateProductRequest, ByteArray?, String?, String?, (String) -> Unit, (String) -> Unit) -> Unit,
+    onCreateProduct: (CreateProductRequest, ByteArray?, String?, String?, List<ByteArray>, (String) -> Unit, (String) -> Unit) -> Unit,
+    onUpdateProduct: (Long, CreateProductRequest, ByteArray?, String?, String?, List<ByteArray>, (String) -> Unit, (String) -> Unit) -> Unit,
     onDeleteProduct: (Product, (String) -> Unit, (String) -> Unit) -> Unit,
     onCreateOrder: (CreateOrderRequest, (String) -> Unit, (String) -> Unit) -> Unit,
     onUpdateOrder: (Long, CreateOrderRequest, (String) -> Unit, (String) -> Unit) -> Unit,
@@ -379,12 +379,13 @@ private fun Dashboard(
         ProductFormDialog(
             initialProduct = null,
             onDismiss = { showAddProductDialog = false },
-            onSave = { request, imageBytes, fileName, mimeType, onDialogSuccess, onDialogError ->
+            onSave = { request, imageBytes, fileName, mimeType, additionalImagesBytes, onDialogSuccess, onDialogError ->
                 onCreateProduct(
                     request,
                     imageBytes,
                     fileName,
                     mimeType,
+                    additionalImagesBytes,
                     /* onSuccess = */ { successMessage ->
                         onDialogSuccess(successMessage)
                         showAddProductDialog = false
@@ -405,13 +406,14 @@ private fun Dashboard(
         ProductFormDialog(
             initialProduct = product,
             onDismiss = { productToEdit = null },
-            onSave = { request, imageBytes, fileName, mimeType, onDialogSuccess, onDialogError ->
+            onSave = { request, imageBytes, fileName, mimeType, additionalImagesBytes, onDialogSuccess, onDialogError ->
                 onUpdateProduct(
                     product.id,
                     request,
                     imageBytes,
                     fileName,
                     mimeType,
+                    additionalImagesBytes,
                     /* onSuccess = */ { successMessage ->
                         onDialogSuccess(successMessage)
                         productToEdit = null
@@ -430,7 +432,7 @@ private fun Dashboard(
     // Delete Product Confirmation Dialog
     productToDelete?.let { product ->
         ConfirmDeleteDialog(
-            title = "Usunąć mebel?",
+            title = "Usuń mebel?",
             message = "Czy na pewno chcesz usunąć „${product.model}”? Tej operacji nie można cofnąć.",
             confirmButtonText = "Usuń",
             onConfirm = {
@@ -506,7 +508,7 @@ private fun Dashboard(
     // Delete Order Confirmation Dialog
     orderToDelete?.let { order ->
         ConfirmDeleteDialog(
-            title = "Usunąć zamówienie?",
+            title = "Usuń zamówienie?",
             message = "Czy na pewno chcesz usunąć zamówienie #${order.id} dla klienta pod adresem „${order.address}”? Zamówienie zostanie trwale usunięte.",
             confirmButtonText = "Usuń",
             onConfirm = {

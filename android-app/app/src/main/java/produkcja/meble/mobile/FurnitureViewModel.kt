@@ -162,6 +162,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         imageBytes: ByteArray?,
         fileName: String?,
         contentType: String?,
+        additionalImagesBytes: List<ByteArray> = emptyList(),
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit,
     ) {
@@ -172,7 +173,14 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             try {
                 val (created, updatedProducts) = withContext(Dispatchers.IO) {
-                    val product = api.createProduct(request, imageBytes, fileName, contentType, session)
+                    val product = api.createProduct(
+                        productRequest = request,
+                        imageBytes = imageBytes,
+                        imageFileName = fileName,
+                        imageMimeType = contentType,
+                        additionalImagesBytes = additionalImagesBytes,
+                        session = session,
+                    )
                     val products = api.getProducts(session)
                     Pair(product, products)
                 }
@@ -195,6 +203,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         imageBytes: ByteArray?,
         fileName: String?,
         contentType: String?,
+        additionalImagesBytes: List<ByteArray> = emptyList(),
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit,
     ) {
@@ -205,7 +214,15 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             try {
                 val (updated, updatedProducts) = withContext(Dispatchers.IO) {
-                    val product = api.updateProduct(id, request, imageBytes, fileName, contentType, session)
+                    val product = api.updateProduct(
+                        id = id,
+                        productRequest = request,
+                        imageBytes = imageBytes,
+                        imageFileName = fileName,
+                        imageMimeType = contentType,
+                        additionalImagesBytes = additionalImagesBytes,
+                        session = session,
+                    )
                     val products = api.getProducts(session)
                     Pair(product, products)
                 }

@@ -66,16 +66,26 @@ class ApiClient(private val baseUrl: String) {
         imageBytes: ByteArray? = null,
         imageFileName: String? = null,
         imageMimeType: String? = null,
+        additionalImagesBytes: List<ByteArray> = emptyList(),
         session: AuthSession,
     ): Product {
         var finalImageUrl = productRequest.imageUrl
         if (imageBytes != null && imageBytes.isNotEmpty()) {
-            val fileName = imageFileName ?: "product_${System.currentTimeMillis()}.jpg"
+            val fileName = imageFileName ?: "product_main_${System.currentTimeMillis()}.jpg"
             val mimeType = imageMimeType ?: "image/jpeg"
             finalImageUrl = uploadImage(imageBytes, fileName, mimeType, session)
         }
 
-        val enrichedRequest = productRequest.copy(imageUrl = finalImageUrl)
+        val uploadedAdditionalUrls = additionalImagesBytes.mapIndexed { index, bytes ->
+            val fileName = "product_extra_${System.currentTimeMillis()}_$index.jpg"
+            uploadImage(bytes, fileName, "image/jpeg", session)
+        }
+        val finalAdditionalImages = productRequest.additionalImages + uploadedAdditionalUrls
+
+        val enrichedRequest = productRequest.copy(
+            imageUrl = finalImageUrl,
+            additionalImages = finalAdditionalImages,
+        )
         val payload = serializeProductRequest(enrichedRequest)
         val response = sendJson("POST", "/api/products", payload.toString(), session.authorizationHeader)
         return parseProduct(JSONObject(response))
@@ -87,16 +97,26 @@ class ApiClient(private val baseUrl: String) {
         imageBytes: ByteArray? = null,
         imageFileName: String? = null,
         imageMimeType: String? = null,
+        additionalImagesBytes: List<ByteArray> = emptyList(),
         session: AuthSession,
     ): Product {
         var finalImageUrl = productRequest.imageUrl
         if (imageBytes != null && imageBytes.isNotEmpty()) {
-            val fileName = imageFileName ?: "product_${System.currentTimeMillis()}.jpg"
+            val fileName = imageFileName ?: "product_main_${System.currentTimeMillis()}.jpg"
             val mimeType = imageMimeType ?: "image/jpeg"
             finalImageUrl = uploadImage(imageBytes, fileName, mimeType, session)
         }
 
-        val enrichedRequest = productRequest.copy(imageUrl = finalImageUrl)
+        val uploadedAdditionalUrls = additionalImagesBytes.mapIndexed { index, bytes ->
+            val fileName = "product_extra_${System.currentTimeMillis()}_$index.jpg"
+            uploadImage(bytes, fileName, "image/jpeg", session)
+        }
+        val finalAdditionalImages = productRequest.additionalImages + uploadedAdditionalUrls
+
+        val enrichedRequest = productRequest.copy(
+            imageUrl = finalImageUrl,
+            additionalImages = finalAdditionalImages,
+        )
         val payload = serializeProductRequest(enrichedRequest)
         val response = sendJson("PUT", "/api/products/$id", payload.toString(), session.authorizationHeader)
         return parseProduct(JSONObject(response))
@@ -124,6 +144,9 @@ class ApiClient(private val baseUrl: String) {
             } else {
                 put("imageUrl", JSONObject.NULL)
             }
+            val additionalArray = JSONArray()
+            request.additionalImages.forEach { additionalArray.put(it) }
+            put("additionalImages", additionalArray)
         }
     }
 
@@ -285,6 +308,15 @@ class ApiClient(private val baseUrl: String) {
     }
 
     private fun parseProduct(json: JSONObject): Product {
+        val additionalImagesArray = json.optJSONArray("additionalImages")
+        val additionalImages = if (additionalImagesArray != null) {
+            (0 until additionalImagesArray.length()).mapNotNull { idx ->
+                additionalImagesArray.optString(idx).takeIf { it.isNotBlank() }
+            }
+        } else {
+            emptyList()
+        }
+
         return Product(
             id = json.getLong("id"),
             price = json.optDouble("price", 0.0),
@@ -299,6 +331,7 @@ class ApiClient(private val baseUrl: String) {
             remarks = json.optString("remarks", ""),
             equipment = json.optString("equipment", ""),
             imageUrl = json.optString("imageUrl", "").takeIf { it.isNotBlank() },
+            additionalImages = additionalImages,
         )
     }
 

@@ -14,7 +14,10 @@ import produkcja.meble.app.mapper.ProductMapper;
 import produkcja.meble.app.repository.OrderItemRepository;
 import produkcja.meble.app.repository.ProductRepository;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +32,11 @@ public class ProductService {
     @Transactional
     public ProductResponse saveProduct(ProductRequest request) {
         Product product = productMapper.toEntity(request);
+        if (request.additionalImages() != null) {
+            product.setAdditionalImages(new ArrayList<>(request.additionalImages()));
+        } else if (product.getAdditionalImages() == null) {
+            product.setAdditionalImages(new ArrayList<>());
+        }
         Product savedProduct = productRepository.save(product);
         return productMapper.toResponse(savedProduct);
     }
@@ -57,12 +65,34 @@ public class ProductService {
     public ProductResponse updateProduct(Long id, ProductRequest request) {
         Product product = findEntityById(id);
         String oldImageUrl = product.getImageUrl();
+        List<String> oldAdditionalImages = new ArrayList<>(
+                product.getAdditionalImages() != null ? product.getAdditionalImages() : List.of()
+        );
 
         productMapper.updateEntityFromRequest(request, product);
+        if (request.additionalImages() != null) {
+            product.setAdditionalImages(new ArrayList<>(request.additionalImages()));
+        } else if (product.getAdditionalImages() == null) {
+            product.setAdditionalImages(new ArrayList<>());
+        }
+
         Product updatedProduct = productRepository.save(product);
 
-        if (StringUtils.hasText(oldImageUrl) && !oldImageUrl.equals(request.imageUrl())) {
+        Set<String> retainedImages = new HashSet<>();
+        if (StringUtils.hasText(product.getImageUrl())) {
+            retainedImages.add(product.getImageUrl());
+        }
+        if (product.getAdditionalImages() != null) {
+            retainedImages.addAll(product.getAdditionalImages());
+        }
+
+        if (StringUtils.hasText(oldImageUrl) && !retainedImages.contains(oldImageUrl)) {
             fileStorageService.deleteFile(oldImageUrl);
+        }
+        for (String oldImg : oldAdditionalImages) {
+            if (StringUtils.hasText(oldImg) && !retainedImages.contains(oldImg)) {
+                fileStorageService.deleteFile(oldImg);
+            }
         }
 
         return productMapper.toResponse(updatedProduct);
@@ -77,10 +107,19 @@ public class ProductService {
         }
 
         String imageUrl = product.getImageUrl();
+        List<String> additionalImages = new ArrayList<>(
+                product.getAdditionalImages() != null ? product.getAdditionalImages() : List.of()
+        );
+
         productRepository.delete(product);
 
         if (StringUtils.hasText(imageUrl)) {
             fileStorageService.deleteFile(imageUrl);
+        }
+        for (String additionalImage : additionalImages) {
+            if (StringUtils.hasText(additionalImage)) {
+                fileStorageService.deleteFile(additionalImage);
+            }
         }
     }
 }

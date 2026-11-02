@@ -24,6 +24,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -43,6 +45,9 @@ fun EmptyState(
     title: String,
     message: String,
     modifier: Modifier = Modifier.fillMaxSize(),
+    icon: ImageVector = Icons.Default.HomeWork,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    titleColor: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     Box(
         modifier = modifier.padding(32.dp),
@@ -50,17 +55,23 @@ fun EmptyState(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
-                imageVector = Icons.Default.HomeWork,
+                imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary,
+                tint = iconTint,
             )
             Spacer(Modifier.height(16.dp))
-            Text(title, style = MaterialTheme.typography.titleLarge)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = titleColor,
+            )
             Text(
                 text = message,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp),
+                textAlign = TextAlign.Center,
             )
         }
     }

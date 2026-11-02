@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
@@ -129,7 +130,13 @@ fun OrderList(
         if (displayedOrders.isEmpty()) {
             val emptyTitle = if (showOnlyActive) "Brak aktywnych zamówień" else "Brak zamówień"
             val emptyDesc = if (showOnlyActive) "Nowe aktywne zamówienia pojawią się tutaj." else "Baza zamówień jest pusta."
-            EmptyState(emptyTitle, emptyDesc)
+            EmptyState(
+                title = emptyTitle,
+                message = emptyDesc,
+                icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                iconTint = orderStyle.primary,
+                titleColor = orderStyle.primary,
+            )
         } else {
             LazyColumn(
                 contentPadding = PaddingValues(16.dp),
