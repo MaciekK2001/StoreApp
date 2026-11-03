@@ -78,6 +78,16 @@ data class SectionStyle(
     val navSelectedColor: Color,
 )
 
+val SectionStyle.accent: Color get() = primary
+val SectionStyle.topBarTitle: Color get() = topBarContent
+val SectionStyle.topBarAction: Color get() = topBarContent
+val SectionStyle.fabContainer: Color get() = fabColor
+val SectionStyle.fabContent: Color get() = fabContentColor
+val SectionStyle.navBarContainer: Color get() = background
+val SectionStyle.navBarIndicator: Color get() = navIndicatorColor
+val SectionStyle.navBarSelectedItem: Color get() = navSelectedColor
+val SectionStyle.navBarUnselectedItem: Color get() = onContainer.copy(alpha = 0.7f)
+
 @Composable
 @ReadOnlyComposable
 fun productSectionStyle(darkTheme: Boolean = isSystemInDarkTheme()): SectionStyle {

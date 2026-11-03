@@ -176,6 +176,15 @@ class ApiClient(private val baseUrl: String) {
                         JSONObject().apply {
                             put("productId", item.productId)
                             put("quantity", item.quantity)
+                            item.price?.let { put("price", it) }
+                            item.length?.let { put("length", it) }
+                            item.depth?.let { put("depth", it) }
+                            item.height?.let { put("height", it) }
+                            if (!item.colour.isNullOrBlank()) put("colour", item.colour)
+                            if (!item.material.isNullOrBlank()) put("material", item.material)
+                            if (!item.fabric.isNullOrBlank()) put("fabric", item.fabric)
+                            if (!item.equipment.isNullOrBlank()) put("equipment", item.equipment)
+                            if (!item.remarks.isNullOrBlank()) put("remarks", item.remarks)
                         }
                     )
                 }
@@ -350,11 +359,22 @@ class ApiClient(private val baseUrl: String) {
             val itemJson = itemsArray.getJSONObject(index)
             val productJson = itemJson.optJSONObject("product")
             val product = productJson?.let { parseProduct(it) }
+            val itemLength = if (itemJson.has("length") && !itemJson.isNull("length")) itemJson.optDouble("length") else null
+            val itemDepth = if (itemJson.has("depth") && !itemJson.isNull("depth")) itemJson.optDouble("depth") else null
+            val itemHeight = if (itemJson.has("height") && !itemJson.isNull("height")) itemJson.optDouble("height") else null
             OrderItem(
                 id = itemJson.optLong("id", 0),
                 product = product,
                 quantity = itemJson.optInt("quantity", 1),
                 price = itemJson.optDouble("price", 0.0),
+                length = itemLength,
+                depth = itemDepth,
+                height = itemHeight,
+                colour = itemJson.optString("colour", ""),
+                material = itemJson.optString("material", ""),
+                fabric = itemJson.optString("fabric", ""),
+                equipment = itemJson.optString("equipment", ""),
+                remarks = itemJson.optString("remarks", ""),
             )
         }
 

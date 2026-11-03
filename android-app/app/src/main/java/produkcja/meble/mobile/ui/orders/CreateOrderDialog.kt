@@ -5,11 +5,14 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -22,11 +25,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddShoppingCart
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -34,10 +39,14 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.PostAdd
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -59,7 +68,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -67,24 +76,69 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import produkcja.meble.mobile.data.CreateOrderRequest
+import produkcja.meble.mobile.data.CreateProductRequest
 import produkcja.meble.mobile.data.FurnitureOrder
+import produkcja.meble.mobile.data.FurnitureType
 import produkcja.meble.mobile.data.OrderItemRequest
 import produkcja.meble.mobile.data.Product
 import produkcja.meble.mobile.ui.common.money
+import produkcja.meble.mobile.ui.common.resolveImageUrl
+import produkcja.meble.mobile.ui.products.ProductFormDialog
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.UUID
 
 private fun String.parseAmount(): Double {
     val clean = this.replace(',', '.').replace(" ", "").trim()
     return clean.toDoubleOrNull() ?: 0.0
+}
+
+data class FormOrderItem(
+    val tempId: String = UUID.randomUUID().toString(),
+    val baseProduct: Product,
+    val quantity: Int = 1,
+    val customPrice: Double? = null,
+    val customLength: Double? = null,
+    val customDepth: Double? = null,
+    val customHeight: Double? = null,
+    val customColour: String = "",
+    val customFabric: String = "",
+    val customMaterial: String = "",
+    val customEquipment: String = "",
+    val customRemarks: String = "",
+) {
+    val effectivePrice: Double get() = customPrice ?: baseProduct.price
+    val effectiveLength: Double get() = customLength ?: baseProduct.length
+    val effectiveDepth: Double get() = customDepth ?: baseProduct.depth
+    val effectiveHeight: Double get() = customHeight ?: baseProduct.height
+    val effectiveColour: String get() = customColour.ifBlank { baseProduct.colour }
+    val effectiveFabric: String get() = customFabric.ifBlank { baseProduct.fabric }
+    val effectiveMaterial: String get() = customMaterial.ifBlank { baseProduct.material }
+    val effectiveEquipment: String get() = customEquipment.ifBlank { baseProduct.equipment }
+    val effectiveRemarks: String get() = customRemarks.ifBlank { baseProduct.remarks }
+
+    val isCustomized: Boolean
+        get() = (customPrice != null && customPrice != baseProduct.price) ||
+                (customLength != null && customLength != baseProduct.length) ||
+                (customDepth != null && customDepth != baseProduct.depth) ||
+                (customHeight != null && customHeight != baseProduct.height) ||
+                (customColour.isNotBlank() && customColour != baseProduct.colour) ||
+                (customFabric.isNotBlank() && customFabric != baseProduct.fabric) ||
+                (customMaterial.isNotBlank() && customMaterial != baseProduct.material) ||
+                (customEquipment.isNotBlank() && customEquipment != baseProduct.equipment) ||
+                (customRemarks.isNotBlank() && customRemarks != baseProduct.remarks)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -93,6 +147,15 @@ fun OrderFormDialog(
     products: List<Product>,
     initialOrder: FurnitureOrder? = null,
     onDismiss: () -> Unit,
+    onCreateProduct: ((
+        request: CreateProductRequest,
+        imageBytes: ByteArray?,
+        fileName: String?,
+        mimeType: String?,
+        additionalImagesBytes: List<ByteArray>,
+        onSuccess: (Product) -> Unit,
+        onError: (String) -> Unit,
+    ) -> Unit)? = null,
     onSave: (
         request: CreateOrderRequest,
         onSuccess: (String) -> Unit,
@@ -168,14 +231,29 @@ fun OrderFormDialog(
 
     var showAdditionalCosts by rememberSaveable { mutableStateOf(hasInitialAdditionalCosts) }
     var showProductPicker by rememberSaveable { mutableStateOf(false) }
+    var showCreateProductDialog by rememberSaveable { mutableStateOf(false) }
+    var itemToCustomize by remember { mutableStateOf<FormOrderItem?>(null) }
 
-    // Selected products: Map of productId -> quantity
-    val selectedItems = remember(initialOrder) {
-        mutableStateMapOf<Long, Int>().apply {
+    // Selected order items list with support for customized parameters
+    val orderItems = remember(initialOrder) {
+        mutableStateListOf<FormOrderItem>().apply {
             initialOrder?.items?.forEach { item ->
-                item.product?.id?.let { pid ->
-                    put(pid, item.quantity)
-                }
+                val prod = item.product ?: return@forEach
+                add(
+                    FormOrderItem(
+                        baseProduct = prod,
+                        quantity = item.quantity,
+                        customPrice = item.price.takeIf { it > 0.0 && it != prod.price },
+                        customLength = item.length?.takeIf { it != prod.length },
+                        customDepth = item.depth?.takeIf { it != prod.depth },
+                        customHeight = item.height?.takeIf { it != prod.height },
+                        customColour = item.colour.takeIf { it != prod.colour }.orEmpty(),
+                        customFabric = item.fabric.takeIf { it != prod.fabric }.orEmpty(),
+                        customMaterial = item.material.takeIf { it != prod.material }.orEmpty(),
+                        customEquipment = item.equipment.takeIf { it != prod.equipment }.orEmpty(),
+                        customRemarks = item.remarks.takeIf { it != prod.remarks }.orEmpty(),
+                    )
+                )
             }
         }
     }
@@ -185,15 +263,10 @@ fun OrderFormDialog(
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var attemptedSubmit by rememberSaveable { mutableStateOf(false) }
 
-    val productsById = remember(products) { products.associateBy { it.id } }
-
     // Live reactive computations: reading Compose states inside derivedStateOf
     val itemsSubtotal by remember {
         derivedStateOf {
-            selectedItems.entries.sumOf { (id, qty) ->
-                val price = productsById[id]?.price ?: 0.0
-                price * qty
-            }
+            orderItems.sumOf { it.effectivePrice * it.quantity }
         }
     }
 
@@ -230,7 +303,7 @@ fun OrderFormDialog(
     val isAddressValid = address.trim().isNotBlank()
     val isPhoneValid = phoneNumber.trim().isNotBlank()
     val isDeliveryDateValid = initialOrder != null || !deliveryDate.isBefore(LocalDate.now())
-    val hasItems = selectedItems.isNotEmpty()
+    val hasItems = orderItems.isNotEmpty()
 
     val dateFormatter = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy") }
 
@@ -241,7 +314,7 @@ fun OrderFormDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth(0.96f)
-                .fillMaxHeight(0.93f)
+                .fillMaxHeight(0.94f)
                 .clip(RoundedCornerShape(24.dp)),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
@@ -378,7 +451,7 @@ fun OrderFormDialog(
                                 )
                                 if (hasItems) {
                                     Text(
-                                        text = "${selectedItems.values.sum()} szt.",
+                                        text = "${orderItems.sumOf { it.quantity }} szt.",
                                         style = MaterialTheme.typography.labelLarge,
                                         color = MaterialTheme.colorScheme.primary,
                                         fontWeight = FontWeight.SemiBold,
@@ -397,7 +470,7 @@ fun OrderFormDialog(
 
                             Spacer(Modifier.height(10.dp))
 
-                            if (selectedItems.isEmpty()) {
+                            if (orderItems.isEmpty()) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -429,78 +502,151 @@ fun OrderFormDialog(
                                 }
                             } else {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    selectedItems.entries.forEach { (id, qty) ->
-                                        val product = productsById[id]
+                                    orderItems.forEachIndexed { index, item ->
                                         Card(
                                             colors = CardDefaults.cardColors(
                                                 containerColor = MaterialTheme.colorScheme.surface,
                                             ),
+                                            border = if (item.isCustomized) {
+                                                BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                                            } else null,
                                             modifier = Modifier.fillMaxWidth(),
                                         ) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(12.dp),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically,
-                                            ) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(
-                                                        text = product?.model ?: "Produkt #$id",
-                                                        style = MaterialTheme.typography.bodyLarge,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                    )
-                                                    Text(
-                                                        text = "${money(product?.price ?: 0.0)} / szt.",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    )
-                                                    Text(
-                                                        text = "Suma: ${money((product?.price ?: 0.0) * qty)}",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        fontWeight = FontWeight.Medium,
-                                                        color = MaterialTheme.colorScheme.primary,
-                                                    )
-                                                }
-
-                                                // Stepper +/-
+                                            Column(modifier = Modifier.padding(12.dp)) {
                                                 Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
                                                     verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                                                 ) {
-                                                    IconButton(
-                                                        onClick = {
-                                                            if (qty > 1) {
-                                                                selectedItems[id] = qty - 1
-                                                            } else {
-                                                                selectedItems.remove(id)
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                        ) {
+                                                            Text(
+                                                                text = item.baseProduct.model,
+                                                                style = MaterialTheme.typography.bodyLarge,
+                                                                fontWeight = FontWeight.Bold,
+                                                            )
+                                                            if (item.isCustomized) {
+                                                                Surface(
+                                                                    shape = RoundedCornerShape(6.dp),
+                                                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                                                ) {
+                                                                    Text(
+                                                                        text = "Dostosowany",
+                                                                        style = MaterialTheme.typography.labelSmall,
+                                                                        fontWeight = FontWeight.Bold,
+                                                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                                    )
+                                                                }
                                                             }
-                                                        },
-                                                        modifier = Modifier.size(32.dp),
-                                                    ) {
-                                                        Icon(
-                                                            if (qty > 1) Icons.Default.Remove else Icons.Default.Delete,
-                                                            contentDescription = "Zmniejsz ilość",
-                                                            modifier = Modifier.size(18.dp),
-                                                            tint = if (qty > 1) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
+                                                        }
+
+                                                        Text(
+                                                            text = "${money(item.effectivePrice)} / szt.",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        )
+                                                        Text(
+                                                            text = "Suma: ${money(item.effectivePrice * item.quantity)}",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = MaterialTheme.colorScheme.primary,
                                                         )
                                                     }
-                                                    Text(
-                                                        text = qty.toString(),
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        modifier = Modifier.padding(horizontal = 6.dp),
-                                                    )
-                                                    IconButton(
-                                                        onClick = {
-                                                            selectedItems[id] = qty + 1
-                                                        },
-                                                        modifier = Modifier.size(32.dp),
+
+                                                    // Stepper +/-
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                                                     ) {
-                                                        Icon(
-                                                            Icons.Default.Add,
-                                                            contentDescription = "Zwiększ ilość",
-                                                            modifier = Modifier.size(18.dp),
+                                                        IconButton(
+                                                            onClick = {
+                                                                if (item.quantity > 1) {
+                                                                    orderItems[index] = item.copy(quantity = item.quantity - 1)
+                                                                } else {
+                                                                    orderItems.removeAt(index)
+                                                                }
+                                                            },
+                                                            modifier = Modifier.size(32.dp),
+                                                        ) {
+                                                            Icon(
+                                                                if (item.quantity > 1) Icons.Default.Remove else Icons.Default.Delete,
+                                                                contentDescription = "Zmniejsz ilość",
+                                                                modifier = Modifier.size(18.dp),
+                                                                tint = if (item.quantity > 1) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
+                                                            )
+                                                        }
+                                                        Text(
+                                                            text = item.quantity.toString(),
+                                                            style = MaterialTheme.typography.titleMedium,
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 6.dp),
+                                                        )
+                                                        IconButton(
+                                                            onClick = {
+                                                                orderItems[index] = item.copy(quantity = item.quantity + 1)
+                                                            },
+                                                            modifier = Modifier.size(32.dp),
+                                                        ) {
+                                                            Icon(
+                                                                Icons.Default.Add,
+                                                                contentDescription = "Zwiększ ilość",
+                                                                modifier = Modifier.size(18.dp),
+                                                            )
+                                                        }
+                                                    }
+                                                }
+
+                                                // Extra customization badges preview
+                                                if (item.isCustomized) {
+                                                    Spacer(Modifier.height(6.dp))
+                                                    Column(
+                                                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f))
+                                                            .padding(8.dp),
+                                                    ) {
+                                                        val dims = "${item.effectiveLength.toPlainString()} × ${item.effectiveDepth.toPlainString()} × ${item.effectiveHeight.toPlainString()} cm"
+                                                        Text("Wymiary: $dims", style = MaterialTheme.typography.bodySmall)
+                                                        if (item.effectiveFabric.isNotBlank()) {
+                                                            Text("Tkanina: ${item.effectiveFabric}", style = MaterialTheme.typography.bodySmall)
+                                                        }
+                                                        if (item.effectiveColour.isNotBlank()) {
+                                                            Text("Kolor: ${item.effectiveColour}", style = MaterialTheme.typography.bodySmall)
+                                                        }
+                                                        if (item.effectiveMaterial.isNotBlank()) {
+                                                            Text("Materiał: ${item.effectiveMaterial}", style = MaterialTheme.typography.bodySmall)
+                                                        }
+                                                        if (item.effectiveEquipment.isNotBlank()) {
+                                                            Text("Wyposażenie: ${item.effectiveEquipment}", style = MaterialTheme.typography.bodySmall)
+                                                        }
+                                                        if (item.effectiveRemarks.isNotBlank()) {
+                                                            Text("Uwagi: ${item.effectiveRemarks}", style = MaterialTheme.typography.bodySmall)
+                                                        }
+                                                    }
+                                                }
+
+                                                // Customize button
+                                                Spacer(Modifier.height(8.dp))
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.End,
+                                                ) {
+                                                    FilledTonalButton(
+                                                        onClick = { itemToCustomize = item },
+                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                                        modifier = Modifier.height(34.dp),
+                                                    ) {
+                                                        Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                        Spacer(Modifier.width(6.dp))
+                                                        Text(
+                                                            text = if (item.isCustomized) "Edytuj parametry / cenę" else "Dostosuj mebel / cenę",
+                                                            style = MaterialTheme.typography.labelMedium,
                                                         )
                                                     }
                                                 }
@@ -512,13 +658,30 @@ fun OrderFormDialog(
 
                             Spacer(Modifier.height(12.dp))
 
-                            FilledTonalButton(
-                                onClick = { showProductPicker = true },
+                            // Action buttons: Pick from catalog OR Add new to catalog & order
+                            Row(
                                 modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                Icon(Icons.Default.Add, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Wybierz meble z katalogu")
+                                FilledTonalButton(
+                                    onClick = { showProductPicker = true },
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Icon(Icons.Default.AddShoppingCart, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Z katalogu")
+                                }
+
+                                if (onCreateProduct != null) {
+                                    OutlinedButton(
+                                        onClick = { showCreateProductDialog = true },
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Icon(Icons.Default.PostAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("+ Nowy mebel")
+                                    }
+                                }
                             }
                         }
                     }
@@ -553,7 +716,7 @@ fun OrderFormDialog(
                                 },
                                 isError = attemptedSubmit && !isDeliveryDateValid,
                                 supportingText = if (attemptedSubmit && !isDeliveryDateValid) {
-                                    { Text("Termin dostawy musi być datą dzisiejszą lub przyszłą.") }
+                                    { Text("Termin dostawy nie może być z przeszłości") }
                                 } else null,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -565,10 +728,9 @@ fun OrderFormDialog(
                                 value = address,
                                 onValueChange = { address = it },
                                 label = { Text("Adres dostawy *") },
-                                placeholder = { Text("np. ul. Marszałkowska 10/5, Warszawa") },
                                 isError = attemptedSubmit && !isAddressValid,
                                 supportingText = if (attemptedSubmit && !isAddressValid) {
-                                    { Text("Adres jest wymagany.") }
+                                    { Text("Adres dostawy jest wymagany") }
                                 } else null,
                                 modifier = Modifier.fillMaxWidth(),
                             )
@@ -577,12 +739,11 @@ fun OrderFormDialog(
                             OutlinedTextField(
                                 value = phoneNumber,
                                 onValueChange = { phoneNumber = it },
-                                label = { Text("Telefon kontaktowy *") },
-                                placeholder = { Text("np. 600 123 456") },
+                                label = { Text("Numer telefonu *") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                                 isError = attemptedSubmit && !isPhoneValid,
                                 supportingText = if (attemptedSubmit && !isPhoneValid) {
-                                    { Text("Numer telefonu jest wymagany.") }
+                                    { Text("Numer telefonu jest wymagany") }
                                 } else null,
                                 modifier = Modifier.fillMaxWidth(),
                             )
@@ -590,7 +751,7 @@ fun OrderFormDialog(
                             // Czas realizacji
                             OutlinedTextField(
                                 value = fulfillmentTime,
-                                onValueChange = { fulfillmentTime = it.filter(Char::isDigit) },
+                                onValueChange = { fulfillmentTime = it },
                                 label = { Text("Czas realizacji (dni)") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.fillMaxWidth(),
@@ -600,14 +761,14 @@ fun OrderFormDialog(
                             OutlinedTextField(
                                 value = contactRemarks,
                                 onValueChange = { contactRemarks = it },
-                                label = { Text("Uwagi do kontaktu") },
-                                placeholder = { Text("np. Dzwonić po godz. 16:00") },
+                                label = { Text("Uwagi do kontaktu z klientem") },
+                                minLines = 2,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
                     }
 
-                    // Section 3: Dodatkowe koszty, montaż, transport, rabat
+                    // Section 3: Dodatkowe koszty i rabaty (rozwijana sekcja)
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -624,19 +785,19 @@ fun OrderFormDialog(
                             ) {
                                 Column {
                                     Text(
-                                        text = "Koszty dodatkowe i rabat",
+                                        text = "Montaż, transport, rabaty i zaliczka",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                     )
                                     Text(
-                                        text = "Montaż, transport, wniesienie, rabat, zaliczka",
+                                        text = if (showAdditionalCosts) "Kliknij, aby zwinąć" else "Kliknij, aby skonfigurować koszty dodatkowe",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                                 IconButton(onClick = { showAdditionalCosts = !showAdditionalCosts }) {
                                     Icon(
-                                        if (showAdditionalCosts) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        imageVector = if (showAdditionalCosts) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                         contentDescription = null,
                                     )
                                 }
@@ -651,87 +812,82 @@ fun OrderFormDialog(
                                     modifier = Modifier.padding(top = 12.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
+                                    HorizontalDivider()
+
                                     // Montaż
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
+                                    Text("Montaż", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         OutlinedTextField(
                                             value = assemblyPrice,
                                             onValueChange = { assemblyPrice = it },
-                                            label = { Text("Montaż (zł)") },
+                                            label = { Text("Cena montażu (zł)") },
                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                            modifier = Modifier.weight(1f),
+                                            modifier = Modifier.weight(0.4f),
                                         )
                                         OutlinedTextField(
                                             value = assemblyRemarks,
                                             onValueChange = { assemblyRemarks = it },
                                             label = { Text("Uwagi do montażu") },
-                                            modifier = Modifier.weight(1.5f),
+                                            modifier = Modifier.weight(0.6f),
                                         )
                                     }
 
                                     // Transport
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
+                                    Text("Transport", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         OutlinedTextField(
                                             value = transportPrice,
                                             onValueChange = { transportPrice = it },
-                                            label = { Text("Transport (zł)") },
+                                            label = { Text("Cena transportu (zł)") },
                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                            modifier = Modifier.weight(1f),
+                                            modifier = Modifier.weight(0.4f),
                                         )
                                         OutlinedTextField(
                                             value = transportRemarks,
                                             onValueChange = { transportRemarks = it },
                                             label = { Text("Uwagi do transportu") },
-                                            modifier = Modifier.weight(1.5f),
+                                            modifier = Modifier.weight(0.6f),
                                         )
                                     }
 
                                     // Wniesienie
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
+                                    Text("Wniesienie", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         OutlinedTextField(
                                             value = carryProductsPrice,
                                             onValueChange = { carryProductsPrice = it },
-                                            label = { Text("Wniesienie (zł)") },
+                                            label = { Text("Cena wniesienia (zł)") },
                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                            modifier = Modifier.weight(1f),
+                                            modifier = Modifier.weight(0.4f),
                                         )
                                         OutlinedTextField(
                                             value = carryProductsRemarks,
                                             onValueChange = { carryProductsRemarks = it },
                                             label = { Text("Uwagi do wniesienia") },
-                                            modifier = Modifier.weight(1.5f),
+                                            modifier = Modifier.weight(0.6f),
                                         )
                                     }
 
                                     // Rabat
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
+                                    Text("Rabat", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         OutlinedTextField(
                                             value = discount,
                                             onValueChange = { discount = it },
-                                            label = { Text("Rabat (zł)") },
+                                            label = { Text("Kwota rabatu (zł)") },
                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                            modifier = Modifier.weight(1f),
+                                            modifier = Modifier.weight(0.4f),
                                         )
                                         OutlinedTextField(
                                             value = discountRemarks,
                                             onValueChange = { discountRemarks = it },
-                                            label = { Text("Uwagi do rabatu") },
-                                            modifier = Modifier.weight(1.5f),
+                                            label = { Text("Powód / uwagi do rabatu") },
+                                            modifier = Modifier.weight(0.6f),
                                         )
                                     }
 
                                     // Zaliczka
+                                    Text("Zaliczka", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                                     OutlinedTextField(
                                         value = deposit,
                                         onValueChange = { deposit = it },
@@ -741,10 +897,11 @@ fun OrderFormDialog(
                                     )
 
                                     // Uwagi ogólne
+                                    Text("Uwagi ogólne", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                                     OutlinedTextField(
                                         value = remarks,
                                         onValueChange = { remarks = it },
-                                        label = { Text("Uwagi ogólne do zamówienia") },
+                                        label = { Text("Ogólne uwagi do zamówienia") },
                                         minLines = 2,
                                         modifier = Modifier.fillMaxWidth(),
                                     )
@@ -753,10 +910,10 @@ fun OrderFormDialog(
                         }
                     }
 
-                    // Section 4: Podsumowanie kwotowe na żywo
+                    // Section 4: Podsumowanie finansowe na żywo
                     Card(
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
                         ),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -765,14 +922,9 @@ fun OrderFormDialog(
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             Text(
-                                text = "Podsumowanie zamówienia",
+                                "Podsumowanie finansowe",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                            HorizontalDivider(
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f),
-                                modifier = Modifier.padding(vertical = 4.dp),
                             )
 
                             Row(
@@ -780,7 +932,7 @@ fun OrderFormDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
                                 Text("Wartość mebli:", style = MaterialTheme.typography.bodyMedium)
-                                Text(money(itemsSubtotal), fontWeight = FontWeight.SemiBold)
+                                Text(money(itemsSubtotal))
                             }
 
                             if (servicesSubtotal > 0.0) {
@@ -791,9 +943,6 @@ fun OrderFormDialog(
                                     Text("Usługi dodatkowe:", style = MaterialTheme.typography.bodyMedium)
                                     Text("+${money(servicesSubtotal)}")
                                 }
-                            }
-
-                            if (servicesSubtotal > 0.0 && parsedDiscount > 0.0) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -909,8 +1058,20 @@ fun OrderFormDialog(
                                 carryProductsRemarks = carryProductsRemarks.trim().takeIf { it.isNotBlank() },
                                 deposit = parsedDeposit,
                                 active = active,
-                                orderItemRequests = selectedItems.map { (id, qty) ->
-                                    OrderItemRequest(productId = id, quantity = qty)
+                                orderItemRequests = orderItems.map { item ->
+                                    OrderItemRequest(
+                                        productId = item.baseProduct.id,
+                                        quantity = item.quantity,
+                                        price = item.effectivePrice,
+                                        length = item.effectiveLength,
+                                        depth = item.effectiveDepth,
+                                        height = item.effectiveHeight,
+                                        colour = item.effectiveColour.takeIf { it.isNotBlank() },
+                                        material = item.effectiveMaterial.takeIf { it.isNotBlank() },
+                                        fabric = item.effectiveFabric.takeIf { it.isNotBlank() },
+                                        equipment = item.effectiveEquipment.takeIf { it.isNotBlank() },
+                                        remarks = item.effectiveRemarks.takeIf { it.isNotBlank() },
+                                    )
                                 },
                             )
 
@@ -973,16 +1134,62 @@ fun OrderFormDialog(
         }
     }
 
-    // Product Picker Dialog
+    // Product Picker Dialog (Select existing product from catalog)
     if (showProductPicker) {
         ProductPickerDialog(
             products = products,
-            selectedItemCounts = selectedItems,
             onAddProduct = { product ->
-                val current = selectedItems[product.id] ?: 0
-                selectedItems[product.id] = current + 1
+                val existingIndex = orderItems.indexOfFirst { it.baseProduct.id == product.id && !it.isCustomized }
+                if (existingIndex >= 0) {
+                    val existing = orderItems[existingIndex]
+                    orderItems[existingIndex] = existing.copy(quantity = existing.quantity + 1)
+                } else {
+                    orderItems.add(FormOrderItem(baseProduct = product, quantity = 1))
+                }
             },
             onDismiss = { showProductPicker = false },
+        )
+    }
+
+    // Create New Product On-The-Fly Dialog
+    if (showCreateProductDialog && onCreateProduct != null) {
+        ProductFormDialog(
+            initialProduct = null,
+            onDismiss = { showCreateProductDialog = false },
+            onSave = { req, imgBytes, fileName, mime, extraBytes, onSucc, onErr ->
+                onCreateProduct(
+                    req,
+                    imgBytes,
+                    fileName,
+                    mime,
+                    extraBytes,
+                    /* onSuccess = */ { createdProduct ->
+                        // Automatically add the new product to order items!
+                        orderItems.add(FormOrderItem(baseProduct = createdProduct, quantity = 1))
+                        showCreateProductDialog = false
+                        onSucc("Dodano mebel \"${createdProduct.model}\" do bazy i zamówienia.")
+                    },
+                    /* onError = */ { err ->
+                        onErr(err)
+                    },
+                )
+            },
+        )
+    }
+
+    // Customize Item Dialog
+    itemToCustomize?.let { item ->
+        CustomizeOrderItemDialog(
+            item = item,
+            onCreateProduct = onCreateProduct,
+            onDismiss = { itemToCustomize = null },
+            onApply = { updatedItem ->
+                val idx = orderItems.indexOfFirst { it.tempId == item.tempId }
+                if (idx >= 0) {
+                    orderItems[idx] = updatedItem
+                }
+                itemToCustomize = null
+            },
         )
     }
 }
@@ -991,6 +1198,15 @@ fun OrderFormDialog(
 fun CreateOrderDialog(
     products: List<Product>,
     onDismiss: () -> Unit,
+    onCreateProduct: ((
+        request: CreateProductRequest,
+        imageBytes: ByteArray?,
+        fileName: String?,
+        mimeType: String?,
+        additionalImagesBytes: List<ByteArray>,
+        onSuccess: (Product) -> Unit,
+        onError: (String) -> Unit,
+    ) -> Unit)? = null,
     onSave: (
         request: CreateOrderRequest,
         onSuccess: (String) -> Unit,
@@ -1001,14 +1217,420 @@ fun CreateOrderDialog(
         products = products,
         initialOrder = null,
         onDismiss = onDismiss,
+        onCreateProduct = onCreateProduct,
         onSave = onSave,
     )
 }
 
 @Composable
+private fun CustomizeOrderItemDialog(
+    item: FormOrderItem,
+    onCreateProduct: ((
+        request: CreateProductRequest,
+        imageBytes: ByteArray?,
+        fileName: String?,
+        mimeType: String?,
+        additionalImagesBytes: List<ByteArray>,
+        onSuccess: (Product) -> Unit,
+        onError: (String) -> Unit,
+    ) -> Unit)? = null,
+    onDismiss: () -> Unit,
+    onApply: (FormOrderItem) -> Unit,
+) {
+    var priceText by rememberSaveable {
+        mutableStateOf(item.effectivePrice.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() })
+    }
+    var lengthText by rememberSaveable {
+        mutableStateOf(item.effectiveLength.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() })
+    }
+    var depthText by rememberSaveable {
+        mutableStateOf(item.effectiveDepth.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() })
+    }
+    var heightText by rememberSaveable {
+        mutableStateOf(item.effectiveHeight.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() })
+    }
+    var colour by rememberSaveable { mutableStateOf(item.effectiveColour) }
+    var fabric by rememberSaveable { mutableStateOf(item.effectiveFabric) }
+    var material by rememberSaveable { mutableStateOf(item.effectiveMaterial) }
+    var equipment by rememberSaveable { mutableStateOf(item.effectiveEquipment) }
+    var remarks by rememberSaveable { mutableStateOf(item.effectiveRemarks) }
+
+    var isSavingToCatalog by rememberSaveable { mutableStateOf(false) }
+    var catalogSaveMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var catalogSaveError by rememberSaveable { mutableStateOf<String?>(null) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .fillMaxHeight(0.92f)
+                .clip(RoundedCornerShape(20.dp)),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp,
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text(
+                            text = "Dostosuj mebel",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = item.baseProduct.model,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Zamknij")
+                    }
+                }
+
+                HorizontalDivider()
+
+                // Content
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    // Catalog base info card
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            val context = LocalContext.current
+                            val resolvedImage = resolveImageUrl(item.baseProduct.imageUrl)
+                            if (resolvedImage != null) {
+                                SubcomposeAsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(resolvedImage)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(54.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Wartości katalogowe:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    text = "Cena: ${money(item.baseProduct.price)} | Wymiary: ${item.baseProduct.length.toPlainString()} × ${item.baseProduct.depth.toPlainString()} × ${item.baseProduct.height.toPlainString()} cm",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                if (item.baseProduct.fabric.isNotBlank() || item.baseProduct.material.isNotBlank()) {
+                                    Text(
+                                        text = listOfNotNull(
+                                            item.baseProduct.fabric.takeIf { it.isNotBlank() }?.let { "Tkanina: $it" },
+                                            item.baseProduct.material.takeIf { it.isNotBlank() }?.let { "Materiał: $it" },
+                                        ).joinToString(" | "),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Cena jednostkowa dla zamówienia
+                    OutlinedTextField(
+                        value = priceText,
+                        onValueChange = { priceText = it },
+                        label = { Text("Cena jednostkowa mebla (zł) *") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        supportingText = { Text("Możesz zmienić cenę dla tego konkretnego zamówienia") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    // Wymiary mebla
+                    Text(
+                        text = "Wymiary (długość × głębokość × wysokość w cm)",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = lengthText,
+                            onValueChange = { lengthText = it },
+                            label = { Text("Długość") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            value = depthText,
+                            onValueChange = { depthText = it },
+                            label = { Text("Głębokość") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            value = heightText,
+                            onValueChange = { heightText = it },
+                            label = { Text("Wysokość") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+
+                    // Tkanina
+                    OutlinedTextField(
+                        value = fabric,
+                        onValueChange = { fabric = it },
+                        label = { Text("Tkanina / Obicie") },
+                        supportingText = { Text("np. Monolith 77, Velvet, Skóra ekologiczna") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    // Kolor
+                    OutlinedTextField(
+                        value = colour,
+                        onValueChange = { colour = it },
+                        label = { Text("Kolorystyka") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    // Materiał
+                    OutlinedTextField(
+                        value = material,
+                        onValueChange = { material = it },
+                        label = { Text("Materiał wykonania") },
+                        supportingText = { Text("np. Drewno dębowe, Płyta laminowana, Metal") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    // Wyposażenie
+                    OutlinedTextField(
+                        value = equipment,
+                        onValueChange = { equipment = it },
+                        label = { Text("Wyposażenie dodatkowe") },
+                        supportingText = { Text("np. Pojemnik na pościel, automat DL") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    // Uwagi do mebla
+                    OutlinedTextField(
+                        value = remarks,
+                        onValueChange = { remarks = it },
+                        label = { Text("Indywidualne uwagi do mebla") },
+                        minLines = 2,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    // Reset button to restore defaults from base product
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TextButton(
+                            onClick = {
+                                priceText = item.baseProduct.price.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }
+                                lengthText = item.baseProduct.length.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }
+                                depthText = item.baseProduct.depth.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }
+                                heightText = item.baseProduct.height.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }
+                                colour = item.baseProduct.colour
+                                fabric = item.baseProduct.fabric
+                                material = item.baseProduct.material
+                                equipment = item.baseProduct.equipment
+                                remarks = item.baseProduct.remarks
+                            },
+                        ) {
+                            Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Przywróć katalogowe")
+                        }
+                    }
+
+                    // Save as new catalog product option
+                    if (onCreateProduct != null) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    text = "Zapis do bazy katalogowej",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    text = "Chcesz zapisać ten zmodyfikowany wariant mebla również jako stałą nową pozycję w katalogu produktów?",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+
+                                if (catalogSaveMessage != null) {
+                                    Text(
+                                        text = catalogSaveMessage.orEmpty(),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                                if (catalogSaveError != null) {
+                                    Text(
+                                        text = catalogSaveError.orEmpty(),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+
+                                FilledTonalButton(
+                                    onClick = {
+                                        isSavingToCatalog = true
+                                        catalogSaveMessage = null
+                                        catalogSaveError = null
+
+                                        val newModelName = "${item.baseProduct.model} (${fabric.ifBlank { colour.ifBlank { "Wariant" } }})"
+                                        val req = CreateProductRequest(
+                                            price = priceText.parseAmount(),
+                                            length = lengthText.parseAmount(),
+                                            depth = depthText.parseAmount(),
+                                            height = heightText.parseAmount(),
+                                            colour = colour.trim(),
+                                            model = newModelName,
+                                            type = item.baseProduct.type,
+                                            material = material.trim(),
+                                            fabric = fabric.trim(),
+                                            remarks = remarks.trim(),
+                                            equipment = equipment.trim(),
+                                            imageUrl = item.baseProduct.imageUrl,
+                                            additionalImages = item.baseProduct.additionalImages,
+                                        )
+
+                                        onCreateProduct(
+                                            req,
+                                            null,
+                                            null,
+                                            null,
+                                            emptyList(),
+                                            /* onSuccess = */ { createdProd ->
+                                                isSavingToCatalog = false
+                                                catalogSaveMessage = "Zapisano w bazie: \"${createdProd.model}\""
+                                                // Update current item to point to the new base product
+                                                onApply(
+                                                    item.copy(
+                                                        baseProduct = createdProd,
+                                                        customPrice = null,
+                                                        customLength = null,
+                                                        customDepth = null,
+                                                        customHeight = null,
+                                                        customColour = "",
+                                                        customFabric = "",
+                                                        customMaterial = "",
+                                                        customEquipment = "",
+                                                        customRemarks = "",
+                                                    )
+                                                )
+                                            },
+                                            /* onError = */ { err ->
+                                                isSavingToCatalog = false
+                                                catalogSaveError = err
+                                            },
+                                        )
+                                    },
+                                    enabled = !isSavingToCatalog,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    if (isSavingToCatalog) {
+                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Zapisywanie...")
+                                    } else {
+                                        Icon(Icons.Default.PostAdd, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Zapisz jako nowy produkt w katalogu")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+
+                // Actions
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(onClick = onDismiss) {
+                        Text("Anuluj")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val parsedPrice = priceText.parseAmount()
+                            val parsedLen = lengthText.parseAmount()
+                            val parsedDep = depthText.parseAmount()
+                            val parsedHei = heightText.parseAmount()
+
+                            val updatedItem = item.copy(
+                                customPrice = parsedPrice.takeIf { it > 0.0 && it != item.baseProduct.price },
+                                customLength = parsedLen.takeIf { it > 0.0 && it != item.baseProduct.length },
+                                customDepth = parsedDep.takeIf { it > 0.0 && it != item.baseProduct.depth },
+                                customHeight = parsedHei.takeIf { it > 0.0 && it != item.baseProduct.height },
+                                customColour = colour.trim().takeIf { it != item.baseProduct.colour }.orEmpty(),
+                                customFabric = fabric.trim().takeIf { it != item.baseProduct.fabric }.orEmpty(),
+                                customMaterial = material.trim().takeIf { it != item.baseProduct.material }.orEmpty(),
+                                customEquipment = equipment.trim().takeIf { it != item.baseProduct.equipment }.orEmpty(),
+                                customRemarks = remarks.trim().takeIf { it != item.baseProduct.remarks }.orEmpty(),
+                            )
+                            onApply(updatedItem)
+                        },
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Zastosuj dla zamówienia")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ProductPickerDialog(
     products: List<Product>,
-    selectedItemCounts: Map<Long, Int>,
     onAddProduct: (Product) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1051,7 +1673,7 @@ private fun ProductPickerDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Wybierz produkt z katalogu",
+                        text = "Wybierz meble z katalogu",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -1065,7 +1687,7 @@ private fun ProductPickerDialog(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Szukaj modelu, typu, materiału...") },
+                    placeholder = { Text("Szukaj modelu, typu, koloru...") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
@@ -1076,12 +1698,12 @@ private fun ProductPickerDialog(
                 if (filteredProducts.isEmpty()) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
+                            .weight(1f)
+                            .fillMaxWidth(),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = if (searchQuery.isBlank()) "Katalog produktów jest pusty" else "Nie znaleziono produktów dla „$searchQuery”",
+                            text = if (searchQuery.isBlank()) "Brak produktów w katalogu" else "Nie znaleziono mebli",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -1090,12 +1712,10 @@ private fun ProductPickerDialog(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        items(filteredProducts, key = Product::id) { product ->
-                            val count = selectedItemCounts[product.id] ?: 0
+                        items(filteredProducts, key = { it.id }) { product ->
                             Card(
-                                onClick = { onAddProduct(product) },
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (count > 0) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surfaceContainer,
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 ),
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
@@ -1106,42 +1726,49 @@ private fun ProductPickerDialog(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
+                                    val context = LocalContext.current
+                                    val resolvedImage = resolveImageUrl(product.imageUrl)
+                                    if (resolvedImage != null) {
+                                        SubcomposeAsyncImage(
+                                            model = ImageRequest.Builder(context)
+                                                .data(resolvedImage)
+                                                .crossfade(true)
+                                                .build(),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .size(46.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
+                                        )
+                                        Spacer(Modifier.width(10.dp))
+                                    }
+
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = product.model,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.SemiBold,
                                         )
                                         Text(
-                                            text = "${product.type} • ${product.material} • ${product.colour}",
+                                            text = "${FurnitureType.displayLabel(product.type)} • ${money(product.price)}",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                         Text(
-                                            text = "${product.length.toInt()} × ${product.depth.toInt()} × ${product.height.toInt()} cm",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                        Spacer(Modifier.height(4.dp))
-                                        Text(
-                                            text = money(product.price),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary,
+                                            text = "${product.length.toPlainString()} × ${product.depth.toPlainString()} × ${product.height.toPlainString()} cm",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.outline,
                                         )
                                     }
 
-                                    Column(
-                                        horizontalAlignment = Alignment.End,
-                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    Button(
+                                        onClick = { onAddProduct(product) },
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                        modifier = Modifier.height(36.dp),
                                     ) {
-                                        FilledTonalButton(
-                                            onClick = { onAddProduct(product) },
-                                        ) {
-                                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text(if (count > 0) "Dodaj kolejny ($count)" else "Wybierz")
-                                        }
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Dodaj")
                                     }
                                 }
                             }
@@ -1151,15 +1778,18 @@ private fun ProductPickerDialog(
 
                 Spacer(Modifier.height(12.dp))
 
-                Button(
-                    onClick = onDismiss,
+                Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
                 ) {
-                    Icon(Icons.Default.Check, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Gotowe")
+                    Button(onClick = onDismiss) {
+                        Text("Gotowe")
+                    }
                 }
             }
         }
     }
 }
+
+private fun Double.toPlainString(): String =
+    if (this % 1.0 == 0.0) this.toLong().toString() else this.toString()

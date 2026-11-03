@@ -64,7 +64,38 @@ data class OrderItem(
     val product: Product?,
     val quantity: Int,
     val price: Double,
-)
+    val length: Double? = null,
+    val depth: Double? = null,
+    val height: Double? = null,
+    val colour: String = "",
+    val material: String = "",
+    val fabric: String = "",
+    val equipment: String = "",
+    val remarks: String = "",
+) {
+    val effectiveLength: Double get() = length ?: product?.length ?: 0.0
+    val effectiveDepth: Double get() = depth ?: product?.depth ?: 0.0
+    val effectiveHeight: Double get() = height ?: product?.height ?: 0.0
+    val effectiveColour: String get() = colour.ifBlank { product?.colour.orEmpty() }
+    val effectiveMaterial: String get() = material.ifBlank { product?.material.orEmpty() }
+    val effectiveFabric: String get() = fabric.ifBlank { product?.fabric.orEmpty() }
+    val effectiveEquipment: String get() = equipment.ifBlank { product?.equipment.orEmpty() }
+    val effectiveRemarks: String get() = remarks.ifBlank { product?.remarks.orEmpty() }
+    val effectivePrice: Double get() = if (price > 0.0) price else (product?.price ?: 0.0)
+
+    val isCustomized: Boolean
+        get() = product != null && (
+            (length != null && length != product.length) ||
+            (depth != null && depth != product.depth) ||
+            (height != null && height != product.height) ||
+            (colour.isNotBlank() && colour != product.colour) ||
+            (fabric.isNotBlank() && fabric != product.fabric) ||
+            (material.isNotBlank() && material != product.material) ||
+            (equipment.isNotBlank() && equipment != product.equipment) ||
+            (remarks.isNotBlank() && remarks != product.remarks) ||
+            (price > 0.0 && price != product.price)
+        )
+}
 
 data class FurnitureOrder(
     val id: Long,
@@ -92,6 +123,15 @@ data class FurnitureOrder(
 data class OrderItemRequest(
     val productId: Long,
     val quantity: Int,
+    val price: Double? = null,
+    val length: Double? = null,
+    val depth: Double? = null,
+    val height: Double? = null,
+    val colour: String? = null,
+    val material: String? = null,
+    val fabric: String? = null,
+    val equipment: String? = null,
+    val remarks: String? = null,
 )
 
 data class CreateOrderRequest(

@@ -62,13 +62,13 @@ import produkcja.meble.mobile.ui.orders.OrderFormDialog
 import produkcja.meble.mobile.ui.orders.OrderList
 import produkcja.meble.mobile.ui.products.ProductFormDialog
 import produkcja.meble.mobile.ui.products.ProductList
-import produkcja.meble.mobile.ui.theme.orderSectionStyle
-import produkcja.meble.mobile.ui.theme.productSectionStyle
+import produkcja.meble.mobile.ui.theme.*
 
 @Composable
 fun FurnitureApp(viewModel: FurnitureViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(state.error) {
         state.error?.let {
@@ -98,6 +98,20 @@ fun FurnitureApp(viewModel: FurnitureViewModel) {
                     onRefresh = viewModel::refresh,
                     onLogout = viewModel::logout,
                     onCreateProduct = viewModel::createProduct,
+                    onCreateProductWithResult = { req, bytes, name, mime, extras, onCreated, onErr ->
+                        viewModel.createProduct(
+                            request = req,
+                            imageBytes = bytes,
+                            fileName = name,
+                            contentType = mime,
+                            additionalImagesBytes = extras,
+                            onProductCreated = onCreated,
+                            onSuccess = { msg ->
+                                coroutineScope.launch { snackbar.showSnackbar(msg) }
+                            },
+                            onError = onErr,
+                        )
+                    },
                     onUpdateProduct = viewModel::updateProduct,
                     onDeleteProduct = viewModel::deleteProduct,
                     onCreateOrder = viewModel::createOrder,
@@ -122,6 +136,7 @@ private fun Dashboard(
     onRefresh: () -> Unit,
     onLogout: () -> Unit,
     onCreateProduct: (CreateProductRequest, ByteArray?, String?, String?, List<ByteArray>, (String) -> Unit, (String) -> Unit) -> Unit,
+    onCreateProductWithResult: (CreateProductRequest, ByteArray?, String?, String?, List<ByteArray>, (Product) -> Unit, (String) -> Unit) -> Unit,
     onUpdateProduct: (Long, CreateProductRequest, ByteArray?, String?, String?, List<ByteArray>, (String) -> Unit, (String) -> Unit) -> Unit,
     onDeleteProduct: (Product, (String) -> Unit, (String) -> Unit) -> Unit,
     onCreateOrder: (CreateOrderRequest, (String) -> Unit, (String) -> Unit) -> Unit,
@@ -144,241 +159,259 @@ private fun Dashboard(
 
     val topBarContainerColor by animateColorAsState(
         targetValue = activeSectionStyle.topBarContainer,
-        label = "top-bar-container",
+        label = "TopBarContainerColor",
     )
-    val topBarContentColor by animateColorAsState(
-        targetValue = activeSectionStyle.topBarContent,
-        label = "top-bar-content",
+    val topBarTitleColor by animateColorAsState(
+        targetValue = activeSectionStyle.topBarTitle,
+        label = "TopBarTitleColor",
     )
-    val navBarContainerColor by animateColorAsState(
-        targetValue = activeSectionStyle.topBarContainer,
-        label = "nav-bar-container",
+    val topBarActionColor by animateColorAsState(
+        targetValue = activeSectionStyle.topBarAction,
+        label = "TopBarActionColor",
+    )
+    val fabContainerColor by animateColorAsState(
+        targetValue = activeSectionStyle.fabContainer,
+        label = "FabContainerColor",
+    )
+    val fabContentColor by animateColorAsState(
+        targetValue = activeSectionStyle.fabContent,
+        label = "FabContentColor",
     )
 
-    var showAddProductDialog by rememberSaveable { mutableStateOf(false) }
-    var showCreateOrderDialog by rememberSaveable { mutableStateOf(false) }
-
+    // Dialog states
+    var showCreateProductDialog by rememberSaveable { mutableStateOf(false) }
     var productToEdit by remember { mutableStateOf<Product?>(null) }
     var productToDelete by remember { mutableStateOf<Product?>(null) }
 
+    var showCreateOrderDialog by rememberSaveable { mutableStateOf(false) }
     var orderToEdit by remember { mutableStateOf<FurnitureOrder?>(null) }
     var orderToDelete by remember { mutableStateOf<FurnitureOrder?>(null) }
 
-    val handleToggleStatus: (FurnitureOrder, Boolean) -> Unit = { order, active ->
-        onToggleOrderStatus(
-            order,
-            active,
-            /* onSuccess = */ { msg ->
-                coroutineScope.launch {
-                    snackbar.showSnackbar(msg)
-                }
-            },
-            /* onError = */ { err ->
-                coroutineScope.launch {
-                    snackbar.showSnackbar(err)
-                }
-            },
-        )
-    }
-
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Icon(
-                            imageVector = when {
-                                selectedOrder != null -> Icons.AutoMirrored.Filled.ReceiptLong
-                                state.section == MainSection.PRODUCTS -> Icons.Default.Chair
-                                else -> Icons.AutoMirrored.Filled.ReceiptLong
+                    Column {
+                        Text(
+                            text = when {
+                                selectedOrder != null -> "Szczegóły zamówienia #${selectedOrder.id}"
+                                state.section == MainSection.PRODUCTS -> "Katalog mebli"
+                                else -> "Zamówienia"
                             },
-                            contentDescription = null,
-                            tint = activeSectionStyle.primary,
-                            modifier = Modifier.size(24.dp),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = topBarTitleColor,
                         )
-                        Column {
-                            Text(
-                                text = when {
-                                    selectedOrder != null -> "Zamówienie #${selectedOrder.id}"
-                                    state.section == MainSection.PRODUCTS -> "Katalog mebli"
-                                    else -> "Zamówienia klientów"
-                                },
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = topBarContentColor,
-                            )
-                            if (selectedOrder == null) {
-                                Text(
-                                    text = state.session?.user?.username?.let { "Użytkownik: $it" }.orEmpty(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = topBarContentColor.copy(alpha = 0.75f),
-                                )
-                            }
-                        }
+                        Text(
+                            text = if (state.loading) "Synchronizacja danych..." else "Zalogowano pomyślnie",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = topBarActionColor.copy(alpha = 0.8f),
+                        )
                     }
                 },
                 navigationIcon = {
                     if (selectedOrder != null) {
                         IconButton(onClick = onCloseOrder) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Wróć",
-                                tint = activeSectionStyle.primary,
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Wróć do listy zamówień",
+                                tint = topBarActionColor,
                             )
                         }
                     }
                 },
                 actions = {
-                    if (selectedOrder == null) {
-                        IconButton(onClick = onRefresh, enabled = !state.loading) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Odśwież",
-                                tint = activeSectionStyle.primary,
-                            )
-                        }
-                        IconButton(onClick = onLogout) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Logout,
-                                contentDescription = "Wyloguj",
-                                tint = activeSectionStyle.primary,
-                            )
-                        }
+                    if (state.loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .padding(end = 4.dp),
+                            color = topBarActionColor,
+                            strokeWidth = 2.dp,
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onRefresh,
+                        enabled = !state.loading,
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Odśwież dane",
+                            tint = topBarActionColor,
+                        )
+                    }
+
+                    IconButton(onClick = onLogout) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = "Wyloguj się",
+                            tint = topBarActionColor,
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = topBarContainerColor,
-                    titleContentColor = topBarContentColor,
-                    actionIconContentColor = activeSectionStyle.primary,
-                    navigationIconContentColor = activeSectionStyle.primary,
                 ),
             )
         },
-        floatingActionButton = {
-            if (selectedOrder == null) {
-                when (state.section) {
-                    MainSection.PRODUCTS -> {
-                        FloatingActionButton(
-                            onClick = { showAddProductDialog = true },
-                            containerColor = productStyle.fabColor,
-                            contentColor = productStyle.fabContentColor,
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = "Dodaj mebel")
-                        }
-                    }
-                    MainSection.ORDERS -> {
-                        FloatingActionButton(
-                            onClick = { showCreateOrderDialog = true },
-                            containerColor = orderStyle.fabColor,
-                            contentColor = orderStyle.fabContentColor,
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = "Nowe zamówienie")
-                        }
-                    }
-                }
-            }
-        },
         bottomBar = {
             if (selectedOrder == null) {
+                val navBarContainerColor by animateColorAsState(
+                    targetValue = activeSectionStyle.navBarContainer,
+                    label = "NavBarContainerColor",
+                )
+                val navBarIndicatorColor by animateColorAsState(
+                    targetValue = activeSectionStyle.navBarIndicator,
+                    label = "NavBarIndicatorColor",
+                )
+                val navBarSelectedItemColor by animateColorAsState(
+                    targetValue = activeSectionStyle.navBarSelectedItem,
+                    label = "NavBarSelectedItemColor",
+                )
+                val navBarUnselectedItemColor by animateColorAsState(
+                    targetValue = activeSectionStyle.navBarUnselectedItem,
+                    label = "NavBarUnselectedItemColor",
+                )
+
+                val bottomNavColors = NavigationBarItemDefaults.colors(
+                    indicatorColor = navBarIndicatorColor,
+                    selectedIconColor = navBarSelectedItemColor,
+                    selectedTextColor = navBarSelectedItemColor,
+                    unselectedIconColor = navBarUnselectedItemColor,
+                    unselectedTextColor = navBarUnselectedItemColor,
+                )
+
                 NavigationBar(
                     containerColor = navBarContainerColor,
-                    tonalElevation = 6.dp,
                 ) {
                     NavigationBarItem(
                         selected = state.section == MainSection.PRODUCTS,
                         onClick = { onSectionSelected(MainSection.PRODUCTS) },
-                        icon = { Icon(Icons.Default.Chair, null) },
-                        label = {
-                            Text(
-                                "Produkty",
-                                fontWeight = if (state.section == MainSection.PRODUCTS) FontWeight.Bold else FontWeight.Normal,
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = productStyle.primary,
-                            selectedTextColor = productStyle.primary,
-                            indicatorColor = productStyle.navIndicatorColor,
-                            unselectedIconColor = activeSectionStyle.primary.copy(alpha = 0.5f),
-                            unselectedTextColor = activeSectionStyle.primary.copy(alpha = 0.7f),
-                        ),
+                        icon = { Icon(Icons.Default.Chair, contentDescription = null) },
+                        label = { Text("Produkty") },
+                        colors = bottomNavColors,
                     )
                     NavigationBarItem(
                         selected = state.section == MainSection.ORDERS,
                         onClick = { onSectionSelected(MainSection.ORDERS) },
-                        icon = { Icon(Icons.AutoMirrored.Filled.ReceiptLong, null) },
-                        label = {
-                            Text(
-                                "Zamówienia",
-                                fontWeight = if (state.section == MainSection.ORDERS) FontWeight.Bold else FontWeight.Normal,
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = orderStyle.primary,
-                            selectedTextColor = orderStyle.primary,
-                            indicatorColor = orderStyle.navIndicatorColor,
-                            unselectedIconColor = activeSectionStyle.primary.copy(alpha = 0.5f),
-                            unselectedTextColor = activeSectionStyle.primary.copy(alpha = 0.7f),
-                        ),
+                        icon = { Icon(Icons.AutoMirrored.Filled.ReceiptLong, contentDescription = null) },
+                        label = { Text("Zamówienia") },
+                        colors = bottomNavColors,
                     )
                 }
             }
         },
-    ) { padding ->
-        Box(
+        floatingActionButton = {
+            if (selectedOrder == null) {
+                FloatingActionButton(
+                    onClick = {
+                        if (state.section == MainSection.PRODUCTS) {
+                            showCreateProductDialog = true
+                        } else {
+                            showCreateOrderDialog = true
+                        }
+                    },
+                    containerColor = fabContainerColor,
+                    contentColor = fabContentColor,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = if (state.section == MainSection.PRODUCTS) {
+                            "Dodaj nowy mebel"
+                        } else {
+                            "Utwórz nowe zamówienie"
+                        },
+                    )
+                }
+            }
+        },
+        snackbarHost = { SnackbarHost(hostState = snackbar) },
+    ) { innerPadding ->
+        Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(innerPadding),
         ) {
             AnimatedContent(
-                targetState = selectedOrder,
-                label = "order-details",
-            ) { order ->
-                if (order != null) {
-                    OrderDetails(
-                        order = order,
-                        onEditOrder = { orderToEdit = it },
-                        onDeleteOrder = { orderToDelete = it },
-                        onToggleStatus = handleToggleStatus,
-                    )
-                } else {
-                    when (state.section) {
-                        MainSection.PRODUCTS -> ProductList(
+                targetState = when {
+                    selectedOrder != null -> "order_details"
+                    state.section == MainSection.PRODUCTS -> "products"
+                    else -> "orders"
+                },
+                label = "MainContentTransition",
+            ) { target ->
+                when (target) {
+                    "order_details" -> {
+                        selectedOrder?.let { order ->
+                            OrderDetails(
+                                order = order,
+                                onEditOrder = { orderToEdit = it },
+                                onDeleteOrder = { orderToDelete = it },
+                                onToggleStatus = { o, active ->
+                                    onToggleOrderStatus(
+                                        o,
+                                        active,
+                                        /* onSuccess = */ { successMessage ->
+                                            coroutineScope.launch {
+                                                snackbar.showSnackbar(successMessage)
+                                            }
+                                        },
+                                        /* onError = */ { errorMessage ->
+                                            coroutineScope.launch {
+                                                snackbar.showSnackbar(errorMessage)
+                                            }
+                                        },
+                                    )
+                                },
+                            )
+                        }
+                    }
+
+                    "products" -> {
+                        ProductList(
                             products = state.products,
                             onEditProduct = { productToEdit = it },
                             onDeleteProduct = { productToDelete = it },
                         )
-                        MainSection.ORDERS -> OrderList(
+                    }
+
+                    "orders" -> {
+                        OrderList(
                             orders = state.orders,
                             showOnlyActive = state.showOnlyActiveOrders,
                             onToggleShowActive = onToggleShowActiveOrders,
                             onOrderSelected = onOrderSelected,
                             onEditOrder = { orderToEdit = it },
                             onDeleteOrder = { orderToDelete = it },
-                            onToggleStatus = handleToggleStatus,
+                            onToggleStatus = { order, active ->
+                                onToggleOrderStatus(
+                                    order,
+                                    active,
+                                    /* onSuccess = */ { successMessage ->
+                                        coroutineScope.launch {
+                                            snackbar.showSnackbar(successMessage)
+                                        }
+                                    },
+                                    /* onError = */ { errorMessage ->
+                                        coroutineScope.launch {
+                                            snackbar.showSnackbar(errorMessage)
+                                        }
+                                    },
+                                )
+                            },
                         )
                     }
                 }
             }
-            if (state.loading) {
-                CircularProgressIndicator(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 12.dp)
-                        .size(28.dp),
-                )
-            }
         }
     }
 
-    // Add Product Dialog
-    if (showAddProductDialog) {
+    // Create Product Dialog
+    if (showCreateProductDialog) {
         ProductFormDialog(
             initialProduct = null,
-            onDismiss = { showAddProductDialog = false },
+            onDismiss = { showCreateProductDialog = false },
             onSave = { request, imageBytes, fileName, mimeType, additionalImagesBytes, onDialogSuccess, onDialogError ->
                 onCreateProduct(
                     request,
@@ -388,7 +421,7 @@ private fun Dashboard(
                     additionalImagesBytes,
                     /* onSuccess = */ { successMessage ->
                         onDialogSuccess(successMessage)
-                        showAddProductDialog = false
+                        showCreateProductDialog = false
                         coroutineScope.launch {
                             snackbar.showSnackbar(successMessage)
                         }
@@ -432,8 +465,8 @@ private fun Dashboard(
     // Delete Product Confirmation Dialog
     productToDelete?.let { product ->
         ConfirmDeleteDialog(
-            title = "Usuń mebel?",
-            message = "Czy na pewno chcesz usunąć „${product.model}”? Tej operacji nie można cofnąć.",
+            title = "Usuń produkt?",
+            message = "Czy na pewno chcesz usunąć produkt „${product.model}”? Tej operacji nie można cofnąć.",
             confirmButtonText = "Usuń",
             onConfirm = {
                 onDeleteProduct(
@@ -462,6 +495,7 @@ private fun Dashboard(
             products = state.products,
             initialOrder = null,
             onDismiss = { showCreateOrderDialog = false },
+            onCreateProduct = onCreateProductWithResult,
             onSave = { request, onDialogSuccess, onDialogError ->
                 onCreateOrder(
                     request,
@@ -486,6 +520,7 @@ private fun Dashboard(
             products = state.products,
             initialOrder = order,
             onDismiss = { orderToEdit = null },
+            onCreateProduct = onCreateProductWithResult,
             onSave = { request, onDialogSuccess, onDialogError ->
                 onUpdateOrder(
                     order.id,

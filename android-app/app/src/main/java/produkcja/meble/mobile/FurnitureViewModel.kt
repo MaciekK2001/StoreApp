@@ -58,43 +58,67 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
     val uiState: StateFlow<FurnitureUiState> = _uiState.asStateFlow()
 
     init {
-        ServerConfig.baseUrl = currentServerUrl
-        if (_uiState.value.session == null) {
-            _uiState.update { it.copy(initialized = true) }
-        } else {
-            refresh()
+        viewModelScope.launch {
+            val session = _uiState.value.session
+            if (session != null) {
+                try {
+                    _uiState.update { it.copy(loading = true, error = null) }
+                    loadDashboard(session)
+                } catch (exception: Exception) {
+                    Log.e("FurnitureViewModel", "Błąd ładowania pulpitu", exception)
+                    handleAuthorizedError(exception)
+                }
+            } else {
+                _uiState.update { it.copy(initialized = true) }
+            }
         }
     }
 
-    fun updateServerUrl(url: String) {
-        val trimmed = url.trim()
-        val formatted = if (trimmed.endsWith("/")) trimmed else "$trimmed/"
-        sessionStore.setServerUrl(formatted)
-        currentServerUrl = sessionStore.getServerUrl()
-        ServerConfig.baseUrl = currentServerUrl
-        api = ApiClient(currentServerUrl)
-        _uiState.update { it.copy(serverUrl = currentServerUrl) }
+    fun updateServerUrl(rawUrl: String) {
+        val trimmed = rawUrl.trim()
+        val sanitized = if (trimmed.endsWith("/")) trimmed else "$trimmed/"
+        sessionStore.setServerUrl(sanitized)
+        ServerConfig.baseUrl = sanitized
+        currentServerUrl = sanitized
+        api = ApiClient(sanitized)
+        _uiState.update { it.copy(serverUrl = sanitized) }
+        refreshData()
     }
 
     fun resetServerUrl() {
         sessionStore.resetServerUrl()
-        currentServerUrl = sessionStore.getServerUrl()
-        ServerConfig.baseUrl = currentServerUrl
-        api = ApiClient(currentServerUrl)
-        _uiState.update { it.copy(serverUrl = currentServerUrl) }
+        val defaultUrl = sessionStore.getServerUrl()
+        ServerConfig.baseUrl = defaultUrl
+        currentServerUrl = defaultUrl
+        api = ApiClient(defaultUrl)
+        _uiState.update { it.copy(serverUrl = defaultUrl) }
+        refreshData()
     }
 
-    fun login(username: String, password: String) {
-        if (username.isBlank() || password.isBlank()) {
-            _uiState.update { it.copy(error = "Uzupełnij nazwę użytkownika i hasło.") }
-            return
-        }
-
+    fun toggleShowOnlyActiveOrders(activeOnly: Boolean) {
+        val session = _uiState.value.session ?: return
+        _uiState.update { it.copy(showOnlyActiveOrders = activeOnly) }
         viewModelScope.launch {
-            _uiState.update { it.copy(loading = true, error = null) }
             try {
+                val orders = withContext(Dispatchers.IO) {
+                    fetchOrders(session, activeOnly)
+                }
+                _uiState.update { it.copy(orders = orders) }
+            } catch (exception: Exception) {
+                Log.e("FurnitureViewModel", "Błąd przełączania widoku zamówień", exception)
+                handleAuthorizedError(exception)
+            }
+        }
+    }
+
+    fun setShowOnlyActiveOrders(activeOnly: Boolean) = toggleShowOnlyActiveOrders(activeOnly)
+
+    fun login(loginRequest: LoginRequest) {
+        viewModelScope.launch {
+            try {
+                _uiState.update { it.copy(loading = true, error = null) }
                 val session = withContext(Dispatchers.IO) {
-                    api.login(LoginRequest(username.trim(), password))
+                    api.login(loginRequest)
                 }
                 sessionStore.save(session)
                 _uiState.update { it.copy(session = session) }
@@ -103,20 +127,22 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
                 Log.e("FurnitureViewModel", "Błąd logowania", exception)
                 _uiState.update {
                     it.copy(
-                        initialized = true,
                         loading = false,
                         error = exception.toUserMessage(),
+                        initialized = true,
                     )
                 }
             }
         }
     }
 
-    fun refresh() {
+    fun login(username: String, password: String) = login(LoginRequest(username, password))
+
+    fun refreshData() {
         val session = _uiState.value.session ?: return
         viewModelScope.launch {
-            _uiState.update { it.copy(loading = true, error = null) }
             try {
+                _uiState.update { it.copy(loading = true, error = null) }
                 loadDashboard(session)
             } catch (exception: Exception) {
                 Log.e("FurnitureViewModel", "Błąd odświeżania", exception)
@@ -125,22 +151,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun setShowOnlyActiveOrders(activeOnly: Boolean) {
-        if (_uiState.value.showOnlyActiveOrders == activeOnly) return
-        val session = _uiState.value.session ?: return
-        _uiState.update { it.copy(showOnlyActiveOrders = activeOnly, loading = true) }
-        viewModelScope.launch {
-            try {
-                val orders = withContext(Dispatchers.IO) {
-                    fetchOrders(session, activeOnly)
-                }
-                _uiState.update { it.copy(orders = orders, loading = false) }
-            } catch (exception: Exception) {
-                Log.e("FurnitureViewModel", "Błąd przełączania widoku zamówień", exception)
-                handleAuthorizedError(exception)
-            }
-        }
-    }
+    fun refresh() = refreshData()
 
     fun refreshOrders() {
         val session = _uiState.value.session ?: return
@@ -163,6 +174,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         fileName: String?,
         contentType: String?,
         additionalImagesBytes: List<ByteArray> = emptyList(),
+        onProductCreated: ((Product) -> Unit)? = null,
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit,
     ) {
@@ -185,7 +197,8 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
                     Pair(product, products)
                 }
                 _uiState.update { it.copy(products = updatedProducts) }
-                onSuccess("Produkt \"${created.model}\" został pomyślnie dodany.")
+                onProductCreated?.invoke(created)
+                onSuccess("Produkt \"${created.model}\" został pomyślnie dodany do katalogu.")
             } catch (exception: Exception) {
                 Log.e("FurnitureViewModel", "Błąd dodawania produktu", exception)
                 val userMsg = exception.toUserMessage()
@@ -195,6 +208,51 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
                 onError(userMsg)
             }
         }
+    }
+
+    fun createProduct(
+        request: CreateProductRequest,
+        imageBytes: ByteArray?,
+        fileName: String?,
+        contentType: String?,
+        additionalImagesBytes: List<ByteArray> = emptyList(),
+        onSuccess: (String) -> Unit,
+        onError: (String) -> Unit,
+    ) {
+        createProduct(
+            request = request,
+            imageBytes = imageBytes,
+            fileName = fileName,
+            contentType = contentType,
+            additionalImagesBytes = additionalImagesBytes,
+            onProductCreated = null,
+            onSuccess = onSuccess,
+            onError = onError,
+        )
+    }
+
+    suspend fun createProductDirect(
+        request: CreateProductRequest,
+        imageBytes: ByteArray? = null,
+        fileName: String? = null,
+        contentType: String? = null,
+        additionalImagesBytes: List<ByteArray> = emptyList(),
+    ): Product {
+        val session = _uiState.value.session ?: throw ApiException(401, "Brak aktywnej sesji")
+        val (created, updatedProducts) = withContext(Dispatchers.IO) {
+            val product = api.createProduct(
+                productRequest = request,
+                imageBytes = imageBytes,
+                imageFileName = fileName,
+                imageMimeType = contentType,
+                additionalImagesBytes = additionalImagesBytes,
+                session = session,
+            )
+            val products = api.getProducts(session)
+            Pair(product, products)
+        }
+        _uiState.update { it.copy(products = updatedProducts) }
+        return created
     }
 
     fun updateProduct(
@@ -240,7 +298,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun deleteProduct(
-        product: Product,
+        id: Long,
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit,
     ) {
@@ -251,11 +309,11 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             try {
                 val updatedProducts = withContext(Dispatchers.IO) {
-                    api.deleteProduct(product.id, session)
+                    api.deleteProduct(id, session)
                     api.getProducts(session)
                 }
                 _uiState.update { it.copy(products = updatedProducts) }
-                onSuccess("Produkt \"${product.model}\" został pomyślnie usunięty.")
+                onSuccess("Produkt został pomyślnie usunięty.")
             } catch (exception: Exception) {
                 Log.e("FurnitureViewModel", "Błąd usuwania produktu", exception)
                 val userMsg = exception.toUserMessage()
@@ -266,6 +324,12 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
     }
+
+    fun deleteProduct(
+        product: Product,
+        onSuccess: (String) -> Unit,
+        onError: (String) -> Unit,
+    ) = deleteProduct(product.id, onSuccess, onError)
 
     fun createOrder(
         request: CreateOrderRequest,

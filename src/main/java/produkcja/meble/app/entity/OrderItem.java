@@ -43,4 +43,28 @@ public class OrderItem {
 
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
+
+    @Column(name = "item_length")
+    private Double length;
+
+    @Column(name = "item_depth")
+    private Double depth;
+
+    @Column(name = "item_height")
+    private Double height;
+
+    @Column(name = "item_colour")
+    private String colour;
+
+    @Column(name = "item_material")
+    private String material;
+
+    @Column(name = "item_fabric")
+    private String fabric;
+
+    @Column(name = "item_equipment")
+    private String equipment;
+
+    @Column(name = "item_remarks", length = 1000)
+    private String remarks;
 }

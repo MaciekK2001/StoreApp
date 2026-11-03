@@ -13,11 +13,11 @@ import produkcja.meble.app.dto.UpdateOrderRequest;
 import produkcja.meble.app.dto.UserResponse;
 import produkcja.meble.app.entity.AccountRole;
 import produkcja.meble.app.entity.Order;
+import produkcja.meble.app.entity.OrderItem;
 import produkcja.meble.app.entity.Product;
 import produkcja.meble.app.entity.UserAccount;
 import produkcja.meble.app.exception.ResourceNotFoundException;
 import produkcja.meble.app.mapper.OrderMapper;
-import produkcja.meble.app.repository.OrderItemRepository;
 import produkcja.meble.app.repository.OrderRepository;
 import produkcja.meble.app.repository.ProductRepository;
 
@@ -27,9 +27,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
@@ -39,9 +42,6 @@ class OrderServiceTest {
 
     @Mock
     private ProductRepository productRepository;
-
-    @Mock
-    private OrderItemRepository orderItemRepository;
 
     @Mock
     private OrderMapper orderMapper;
@@ -72,6 +72,62 @@ class OrderServiceTest {
 
         assertNotNull(createdOrder);
         verify(orderRepository).save(any(Order.class));
+    }
+
+    @Test
+    void saveOrderWithCustomizedOrderItemPreservesCustomAttributes() {
+        OrderItemRequest customItem = OrderItemRequest.builder()
+                .productId(1L)
+                .quantity(2)
+                .price(BigDecimal.valueOf(2500))
+                .length(210.0)
+                .depth(180.0)
+                .height(115.0)
+                .fabric("Velvet Green")
+                .colour("Butelkowa zieleń")
+                .material("Drewno dębowe")
+                .equipment("Pojemnik na pościel")
+                .remarks("Nóżki czarne matowe")
+                .build();
+
+        CreateOrderRequest customRequest = CreateOrderRequest.builder()
+                .deliveryDate(LocalDateTime.now().plusDays(7))
+                .address("Warszawa, Złota 44")
+                .phoneNumber("987654321")
+                .orderItemRequests(List.of(customItem))
+                .build();
+
+        Product catalogProduct = Product.builder()
+                .id(1L)
+                .price(BigDecimal.valueOf(1900))
+                .length(200.0)
+                .depth(160.0)
+                .height(100.0)
+                .fabric("Katalog Standard")
+                .colour("Szary")
+                .material("Sosna")
+                .build();
+
+        Order customOrder = buildTestOrder();
+        when(orderMapper.toEntity(customRequest)).thenReturn(customOrder);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(catalogProduct));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderMapper.toResponse(any(Order.class))).thenReturn(orderResponse);
+
+        OrderResponse response = orderService.saveOrder(customRequest);
+
+        assertNotNull(response);
+        assertEquals(1, customOrder.getItems().size());
+        OrderItem savedItem = customOrder.getItems().getFirst();
+        assertEquals(BigDecimal.valueOf(2500), savedItem.getPrice());
+        assertEquals(210.0, savedItem.getLength());
+        assertEquals(180.0, savedItem.getDepth());
+        assertEquals(115.0, savedItem.getHeight());
+        assertEquals("Velvet Green", savedItem.getFabric());
+        assertEquals("Butelkowa zieleń", savedItem.getColour());
+        assertEquals("Drewno dębowe", savedItem.getMaterial());
+        assertEquals("Pojemnik na pościel", savedItem.getEquipment());
+        assertEquals("Nóżki czarne matowe", savedItem.getRemarks());
     }
 
     @Test
@@ -205,10 +261,9 @@ class OrderServiceTest {
     private OrderResponse buildTestOrderResponse() {
         return OrderResponse.builder()
                 .id(1L)
+                .deliveryDate(LocalDateTime.now().plusDays(7))
                 .address("Testowa 1")
                 .phoneNumber("123456789")
-                .active(true)
-                .items(List.of())
                 .build();
     }
 }

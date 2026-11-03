@@ -50,14 +50,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import produkcja.meble.mobile.data.FurnitureType
-import produkcja.meble.mobile.data.ProductFilter
+import produkcja.meble.mobile.data.ProductFilter as ProductFilterData
 import produkcja.meble.mobile.ui.common.number
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProductFilter(
-    filter: ProductFilter,
-    onFilterChange: (ProductFilter) -> Unit,
+    filter: ProductFilterData,
+    onFilterChange: (ProductFilterData) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var isExpanded by rememberSaveable { mutableStateOf(false) }
@@ -109,7 +109,7 @@ fun ProductFilter(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (!filter.isEmpty) {
                         IconButton(
-                            onClick = { onFilterChange(ProductFilter()) },
+                            onClick = { onFilterChange(ProductFilterData()) },
                             modifier = Modifier.size(32.dp),
                         ) {
                             Icon(
@@ -136,84 +136,75 @@ fun ProductFilter(
 
             AnimatedVisibility(
                 visible = isExpanded,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut(),
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
             ) {
                 Column(
-                    modifier = Modifier.padding(top = 10.dp),
+                    modifier = Modifier.padding(top = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    // Wyszukiwanie po modelu / tekście
                     OutlinedTextField(
                         value = filter.model.orEmpty(),
                         onValueChange = { onFilterChange(filter.copy(model = it.ifBlank { null })) },
-                        label = { Text("Szukaj (model, typ, nazwa)") },
-                        placeholder = { Text("np. Sofa, Chesterfield, Moderno...") },
+                        label = { Text("Szukaj po nazwie / opisie") },
+                        placeholder = { Text("np. Sofa, Dąb, Riviera...") },
                         leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                            )
+                            Icon(Icons.Default.Search, contentDescription = null)
                         },
-                        trailingIcon = if (!filter.model.isNullOrBlank()) {
-                            {
-                                IconButton(
-                                    onClick = { onFilterChange(filter.copy(model = null)) },
-                                    modifier = Modifier.size(24.dp),
-                                ) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Wyczyść", modifier = Modifier.size(16.dp))
+                        trailingIcon = {
+                            if (!filter.model.isNullOrBlank()) {
+                                IconButton(onClick = { onFilterChange(filter.copy(model = null)) }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Wyczyść")
                                 }
                             }
-                        } else null,
+                        },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                         modifier = Modifier.fillMaxWidth(),
                     )
 
+                    // Typ mebla (chipy wielokrotnego wyboru)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
-                            text = "Typ mebla",
+                            text = "Kategoria mebla",
                             style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            val availableTypes = remember { FurnitureType.entries.map { it.displayName } }
-                            availableTypes.forEach { typeName ->
-                                val isSelected = filter.type.contains(typeName)
+                            FurnitureType.entries.forEach { type ->
+                                val isSelected = filter.type.contains(type.displayName)
                                 FilterChip(
                                     selected = isSelected,
                                     onClick = {
                                         val updatedTypes = if (isSelected) {
-                                            filter.type - typeName
+                                            filter.type - type.displayName
                                         } else {
-                                            filter.type + typeName
+                                            filter.type + type.displayName
                                         }
                                         onFilterChange(filter.copy(type = updatedTypes))
                                     },
-                                    label = { Text(typeName) },
+                                    label = { Text(type.displayName) },
                                     leadingIcon = if (isSelected) {
-                                        {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(FilterChipDefaults.IconSize),
-                                            )
-                                        }
+                                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                     } else null,
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    ),
                                 )
                             }
                         }
                     }
 
+                    // Cena (min - max)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             text = "Cena (zł)",
                             style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Row(
@@ -223,23 +214,23 @@ fun ProductFilter(
                             NumberFilterField(
                                 value = filter.minPrice,
                                 onValueChange = { onFilterChange(filter.copy(minPrice = it)) },
-                                label = "Od",
+                                label = "Cena od",
                                 modifier = Modifier.weight(1f),
                             )
                             NumberFilterField(
                                 value = filter.maxPrice,
                                 onValueChange = { onFilterChange(filter.copy(maxPrice = it)) },
-                                label = "Do",
+                                label = "Cena do",
                                 modifier = Modifier.weight(1f),
                             )
                         }
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Wymiary (Długość, Głębokość, Wysokość)
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             text = "Wymiary (cm)",
                             style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         DimensionFilterRow(
@@ -265,11 +256,11 @@ fun ProductFilter(
                         )
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Kolor, Tkanina, Materiał
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
-                            text = "Wykończenie i materiały",
+                            text = "Materiały i kolory",
                             style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Row(
@@ -305,7 +296,7 @@ fun ProductFilter(
 
                     if (!filter.isEmpty) {
                         OutlinedButton(
-                            onClick = { onFilterChange(ProductFilter()) },
+                            onClick = { onFilterChange(ProductFilterData()) },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(18.dp))

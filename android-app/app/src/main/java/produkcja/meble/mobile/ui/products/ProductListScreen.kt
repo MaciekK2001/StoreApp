@@ -26,7 +26,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import produkcja.meble.mobile.data.FurnitureType
 import produkcja.meble.mobile.data.Product
-import produkcja.meble.mobile.data.ProductFilter
+import produkcja.meble.mobile.data.ProductFilter as ProductFilterData
 import produkcja.meble.mobile.ui.common.EmptyState
 import produkcja.meble.mobile.ui.common.FullScreenImageDialog
 import produkcja.meble.mobile.ui.theme.MebleMobileTheme
@@ -45,7 +45,7 @@ fun ProductList(
     onEditProduct: ((Product) -> Unit)? = null,
     onDeleteProduct: ((Product) -> Unit)? = null,
 ) {
-    var activeFilter by remember { mutableStateOf(ProductFilter()) }
+    var activeFilter by remember { mutableStateOf(ProductFilterData()) }
     var fullScreenImage by remember { mutableStateOf<FullScreenImageData?>(null) }
     val backgroundColor = productListBackgroundColor()
 
@@ -56,13 +56,9 @@ fun ProductList(
             products.filter { product ->
                 val matchesType = activeFilter.type.isEmpty() || activeFilter.type.any { selectedType ->
                     val productType = FurnitureType.from(product.type)
-                    if (productType != null) {
-                        productType.displayName.equals(selectedType, ignoreCase = true) ||
-                            productType.name.equals(selectedType, ignoreCase = true) ||
-                            product.type.contains(selectedType, ignoreCase = true)
-                    } else {
+                    (productType?.displayName?.equals(selectedType, ignoreCase = true) == true) ||
+                        (productType?.name?.equals(selectedType, ignoreCase = true) == true) ||
                         product.type.contains(selectedType, ignoreCase = true)
-                    }
                 }
                 val matchesMinPrice = activeFilter.minPrice == null || product.price >= activeFilter.minPrice!!
                 val matchesMaxPrice = activeFilter.maxPrice == null || product.price <= activeFilter.maxPrice!!
@@ -161,8 +157,8 @@ fun ProductList(
                 Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                     ProductCard(
                         product = product,
-                        onImageClick = { images, initialIndex, title ->
-                            fullScreenImage = FullScreenImageData(images = images, initialIndex = initialIndex, title = title)
+                        onImageClick = { images, index, title ->
+                            fullScreenImage = FullScreenImageData(images = images, initialIndex = index, title = title)
                         },
                         onEditClick = onEditProduct?.let { { it(product) } },
                         onDeleteClick = onDeleteProduct?.let { { it(product) } },

@@ -48,12 +48,7 @@ public class OrderService {
             Product product = productRepository.findById(itemRequest.productId())
                     .orElseThrow(() -> new ResourceNotFoundException("Product", itemRequest.productId()));
 
-            OrderItem item = OrderItem.builder()
-                    .product(product)
-                    .quantity(itemRequest.quantity())
-                    .price(product.getPrice())
-                    .build();
-
+            OrderItem item = buildOrderItem(itemRequest, product);
             order.addItem(item);
         }
 
@@ -102,18 +97,42 @@ public class OrderService {
                 Product product = productRepository.findById(itemRequest.productId())
                         .orElseThrow(() -> new ResourceNotFoundException("Product", itemRequest.productId()));
 
-                OrderItem item = OrderItem.builder()
-                        .product(product)
-                        .quantity(itemRequest.quantity())
-                        .price(product.getPrice())
-                        .build();
-
+                OrderItem item = buildOrderItem(itemRequest, product);
                 order.addItem(item);
             }
         }
 
         Order updatedOrder = orderRepository.save(order);
         return orderMapper.toResponse(updatedOrder);
+    }
+
+    private OrderItem buildOrderItem(OrderItemRequest itemRequest, Product product) {
+        BigDecimal price = (itemRequest.price() != null && itemRequest.price().compareTo(BigDecimal.ZERO) >= 0)
+                ? itemRequest.price()
+                : (product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO);
+
+        Double length = itemRequest.length() != null ? itemRequest.length() : product.getLength();
+        Double depth = itemRequest.depth() != null ? itemRequest.depth() : product.getDepth();
+        Double height = itemRequest.height() != null ? itemRequest.height() : product.getHeight();
+        String colour = (itemRequest.colour() != null && !itemRequest.colour().isBlank()) ? itemRequest.colour().trim() : product.getColour();
+        String material = (itemRequest.material() != null && !itemRequest.material().isBlank()) ? itemRequest.material().trim() : product.getMaterial();
+        String fabric = (itemRequest.fabric() != null && !itemRequest.fabric().isBlank()) ? itemRequest.fabric().trim() : product.getFabric();
+        String equipment = (itemRequest.equipment() != null && !itemRequest.equipment().isBlank()) ? itemRequest.equipment().trim() : product.getEquipment();
+        String remarks = (itemRequest.remarks() != null && !itemRequest.remarks().isBlank()) ? itemRequest.remarks().trim() : product.getRemarks();
+
+        return OrderItem.builder()
+                .product(product)
+                .quantity(itemRequest.quantity())
+                .price(price)
+                .length(length)
+                .depth(depth)
+                .height(height)
+                .colour(colour)
+                .material(material)
+                .fabric(fabric)
+                .equipment(equipment)
+                .remarks(remarks)
+                .build();
     }
 
     @Transactional
