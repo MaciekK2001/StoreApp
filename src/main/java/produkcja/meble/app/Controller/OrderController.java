@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import produkcja.meble.app.dto.CreateOrderRequest;
 import produkcja.meble.app.dto.OrderResponse;
 import produkcja.meble.app.dto.UpdateOrderRequest;
+import produkcja.meble.app.entity.OrderStatus;
 import produkcja.meble.app.entity.UserAccount;
 import produkcja.meble.app.service.OrderService;
 
@@ -34,9 +35,13 @@ public class OrderController {
 
     @GetMapping
     public ResponseEntity<List<OrderResponse>> getOrders(
+            @RequestParam(required = false) OrderStatus status,
             @RequestParam(required = false, defaultValue = "false") boolean activeOnly,
             @RequestParam(required = false) Boolean active
     ) {
+        if (status != null) {
+            return ResponseEntity.ok(orderService.findOrdersByStatus(status));
+        }
         if (activeOnly || Boolean.TRUE.equals(active)) {
             return ResponseEntity.ok(orderService.findAllActiveOrders());
         }
@@ -77,9 +82,16 @@ public class OrderController {
     @PatchMapping("/{id}/status")
     public ResponseEntity<OrderResponse> updateOrderStatus(
             @PathVariable Long id,
-            @RequestParam boolean active
+            @RequestParam(required = false) OrderStatus status,
+            @RequestParam(required = false) Boolean active
     ) {
-        return ResponseEntity.ok(orderService.setOrderActiveStatus(id, active));
+        if (status != null) {
+            return ResponseEntity.ok(orderService.setOrderStatus(id, status));
+        }
+        if (active != null) {
+            return ResponseEntity.ok(orderService.setOrderActiveStatus(id, active));
+        }
+        return ResponseEntity.badRequest().build();
     }
 
     @PatchMapping("/{id}/soft-not-active")

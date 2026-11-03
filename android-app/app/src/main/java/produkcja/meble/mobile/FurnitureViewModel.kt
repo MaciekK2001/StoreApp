@@ -19,6 +19,7 @@ import produkcja.meble.mobile.data.CreateOrderRequest
 import produkcja.meble.mobile.data.CreateProductRequest
 import produkcja.meble.mobile.data.FurnitureOrder
 import produkcja.meble.mobile.data.LoginRequest
+import produkcja.meble.mobile.data.OrderStatus
 import produkcja.meble.mobile.data.Product
 import produkcja.meble.mobile.data.SessionStore
 import produkcja.meble.mobile.ui.common.ServerConfig
@@ -41,6 +42,7 @@ data class FurnitureUiState(
     val selectedOrder: FurnitureOrder? = null,
     val error: String? = null,
     val showOnlyActiveOrders: Boolean = true,
+    val selectedOrderStatusFilter: OrderStatus? = OrderStatus.ACTIVE,
     val serverUrl: String = BuildConfig.API_BASE_URL,
 )
 
@@ -397,9 +399,9 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setOrderStatus(
         order: FurnitureOrder,
-        active: Boolean,
-        onSuccess: (String) -> Unit,
-        onError: (String) -> Unit,
+        status: OrderStatus,
+        onSuccess: (String) -> Unit = {},
+        onError: (String) -> Unit = {},
     ) {
         val session = _uiState.value.session ?: run {
             onError("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.")
@@ -408,7 +410,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             try {
                 val (updatedOrder, updatedOrders) = withContext(Dispatchers.IO) {
-                    val updated = api.setOrderStatus(order.id, active, session)
+                    val updated = api.setOrderStatus(order.id, status, session)
                     val orders = fetchOrders(session)
                     Pair(updated, orders)
                 }
@@ -418,12 +420,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
                         selectedOrder = if (it.selectedOrder?.id == order.id) updatedOrder else it.selectedOrder,
                     )
                 }
-                val msg = if (active) {
-                    "Zamówienie #${order.id} oznaczono jako aktywne."
-                } else {
-                    "Zamówienie #${order.id} oznaczono jako nieaktywne."
-                }
-                onSuccess(msg)
+                onSuccess("Status zamówienia #${order.id} zmieniono na: ${status.displayName}.")
             } catch (exception: Exception) {
                 Log.e("FurnitureViewModel", "Błąd zmiany statusu zamówienia", exception)
                 val userMsg = exception.toUserMessage()
@@ -432,6 +429,24 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
                 }
                 onError(userMsg)
             }
+        }
+    }
+
+    fun setOrderStatus(
+        order: FurnitureOrder,
+        active: Boolean,
+        onSuccess: (String) -> Unit = {},
+        onError: (String) -> Unit = {},
+    ) {
+        setOrderStatus(order, if (active) OrderStatus.ACTIVE else OrderStatus.COMPLETED, onSuccess, onError)
+    }
+
+    fun setSelectedOrderStatusFilter(status: OrderStatus?) {
+        _uiState.update {
+            it.copy(
+                selectedOrderStatusFilter = status,
+                showOnlyActiveOrders = (status == OrderStatus.ACTIVE),
+            )
         }
     }
 
@@ -503,13 +518,9 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
 
     private suspend fun fetchOrders(
         session: AuthSession,
-        activeOnly: Boolean = _uiState.value.showOnlyActiveOrders,
+        activeOnly: Boolean = false,
     ): List<FurnitureOrder> {
-        return if (activeOnly) {
-            api.getActiveOrders(session)
-        } else {
-            api.getOrders(session)
-        }
+        return api.getOrders(session)
     }
 
     private suspend fun loadDashboard(session: AuthSession) {

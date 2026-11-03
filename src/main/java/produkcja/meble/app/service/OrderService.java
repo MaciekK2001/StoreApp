@@ -9,6 +9,7 @@ import produkcja.meble.app.dto.OrderResponse;
 import produkcja.meble.app.dto.UpdateOrderRequest;
 import produkcja.meble.app.entity.Order;
 import produkcja.meble.app.entity.OrderItem;
+import produkcja.meble.app.entity.OrderStatus;
 import produkcja.meble.app.entity.Product;
 import produkcja.meble.app.entity.UserAccount;
 import produkcja.meble.app.exception.ResourceNotFoundException;
@@ -61,6 +62,14 @@ public class OrderService {
         return orderMapper.toResponseList(activeOrders);
     }
 
+    public List<OrderResponse> findOrdersByStatus(OrderStatus status) {
+        if (status == null) {
+            return findAllOrders();
+        }
+        List<Order> orders = orderRepository.findByStatusOrderByCreatedAtDesc(status);
+        return orderMapper.toResponseList(orders);
+    }
+
     public List<OrderResponse> findAllOrders() {
         List<Order> allOrders = orderRepository.findAllByOrderByCreatedAtDesc();
         return orderMapper.toResponseList(allOrders);
@@ -81,7 +90,9 @@ public class OrderService {
         Order order = findEntityById(id);
         orderMapper.updateEntityFromRequest(request, order);
 
-        if (request.active() != null) {
+        if (request.status() != null) {
+            order.setStatus(request.status());
+        } else if (request.active() != null) {
             order.setActive(request.active());
         }
 
@@ -151,6 +162,14 @@ public class OrderService {
     public OrderResponse setOrderActiveStatus(Long id, boolean active) {
         Order order = findEntityById(id);
         order.setActive(active);
+        Order savedOrder = orderRepository.save(order);
+        return orderMapper.toResponse(savedOrder);
+    }
+
+    @Transactional
+    public OrderResponse setOrderStatus(Long id, OrderStatus status) {
+        Order order = findEntityById(id);
+        order.setStatus(status);
         Order savedOrder = orderRepository.save(order);
         return orderMapper.toResponse(savedOrder);
     }

@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Builder;
+import produkcja.meble.app.entity.OrderStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -54,11 +55,10 @@ public record CreateOrderRequest(
         @PositiveOrZero(message = "Deposit must be greater than or equal to 0")
         BigDecimal deposit,
 
+        OrderStatus status,
+
         @Valid
         @NotEmpty(message = "Order must contain at least one item")
         List<OrderItemRequest> orderItemRequests
 ) {
-    public List<OrderItemRequest> getOrderItemRequests() {
-        return orderItemRequests;
-    }
 }

@@ -52,9 +52,14 @@ class ApiClient(private val baseUrl: String) {
         return parseOrder(JSONObject(response))
     }
 
-    fun setOrderStatus(id: Long, active: Boolean, session: AuthSession): FurnitureOrder {
-        val response = sendJson("PATCH", "/api/orders/$id/status?active=$active", null, session.authorizationHeader)
+    fun setOrderStatus(id: Long, status: OrderStatus, session: AuthSession): FurnitureOrder {
+        val response = sendJson("PATCH", "/api/orders/$id/status?status=${status.name}", null, session.authorizationHeader)
         return parseOrder(JSONObject(response))
+    }
+
+    fun setOrderStatus(id: Long, active: Boolean, session: AuthSession): FurnitureOrder {
+        val status = if (active) OrderStatus.ACTIVE else OrderStatus.COMPLETED
+        return setOrderStatus(id, status, session)
     }
 
     fun deleteOrder(id: Long, session: AuthSession) {
@@ -168,6 +173,7 @@ class ApiClient(private val baseUrl: String) {
             request.carryProductsRemarks?.let { put("carryProductsRemarks", it) }
             put("deposit", request.deposit)
             request.active?.let { put("active", it) }
+            request.status?.let { put("status", it) }
 
             val itemsArray = JSONArray()
             request.orderItemRequests.forEach { item ->
@@ -398,6 +404,9 @@ class ApiClient(private val baseUrl: String) {
             carryProductsRemarks = json.optString("carryProductsRemarks", ""),
             deposit = json.optDouble("deposit", 0.0),
             active = json.optBoolean("active", true),
+            status = json.optString("status", "").ifBlank {
+                if (json.optBoolean("active", true)) "ACTIVE" else "COMPLETED"
+            },
             items = items,
         )
     }

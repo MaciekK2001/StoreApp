@@ -8,6 +8,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,9 +23,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
@@ -32,9 +35,10 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -45,8 +49,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +65,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import produkcja.meble.mobile.data.FurnitureOrder
+import produkcja.meble.mobile.data.OrderStatus
 import produkcja.meble.mobile.ui.common.EmptyState
 import produkcja.meble.mobile.ui.common.date
 import produkcja.meble.mobile.ui.common.isMeaningful
@@ -68,23 +75,88 @@ import produkcja.meble.mobile.ui.theme.orderSectionStyle
 @Composable
 fun OrderList(
     orders: List<FurnitureOrder>,
+    selectedStatus: OrderStatus? = OrderStatus.ACTIVE,
+    onSelectStatus: (OrderStatus?) -> Unit = {},
     showOnlyActive: Boolean = true,
     onToggleShowActive: (Boolean) -> Unit = {},
     onOrderSelected: (FurnitureOrder) -> Unit,
     onEditOrder: ((FurnitureOrder) -> Unit)? = null,
     onDeleteOrder: ((FurnitureOrder) -> Unit)? = null,
     onToggleStatus: ((FurnitureOrder, Boolean) -> Unit)? = null,
+    onUpdateOrderStatus: ((FurnitureOrder, OrderStatus) -> Unit)? = null,
 ) {
     val isDark = isSystemInDarkTheme()
     val orderStyle = orderSectionStyle(isDark)
     val backgroundColor = orderListBackgroundColor(isDark)
 
-    val displayedOrders = remember(orders, showOnlyActive) {
-        if (showOnlyActive) {
-            orders.filter { it.active }
+    var orderForStatusChange by remember { mutableStateOf<FurnitureOrder?>(null) }
+
+    val displayedOrders = remember(orders, selectedStatus) {
+        if (selectedStatus != null) {
+            orders.filter { it.orderStatus == selectedStatus }
         } else {
             orders
         }
+    }
+
+    if (orderForStatusChange != null) {
+        val targetOrder = orderForStatusChange!!
+        AlertDialog(
+            onDismissRequest = { orderForStatusChange = null },
+            title = {
+                Text(
+                    text = "Zmień status zamówienia #${targetOrder.id}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OrderStatus.entries.forEach { statusOption ->
+                        val isSelected = targetOrder.orderStatus == statusOption
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    if (onUpdateOrderStatus != null) {
+                                        onUpdateOrderStatus(targetOrder, statusOption)
+                                    } else if (onToggleStatus != null) {
+                                        onToggleStatus(targetOrder, statusOption == OrderStatus.ACTIVE)
+                                    }
+                                    orderForStatusChange = null
+                                }
+                                .padding(horizontal = 8.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = {
+                                    if (onUpdateOrderStatus != null) {
+                                        onUpdateOrderStatus(targetOrder, statusOption)
+                                    } else if (onToggleStatus != null) {
+                                        onToggleStatus(targetOrder, statusOption == OrderStatus.ACTIVE)
+                                    }
+                                    orderForStatusChange = null
+                                },
+                            )
+                            Text(
+                                text = statusOption.displayName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { orderForStatusChange = null }) {
+                    Text("Anuluj")
+                }
+            },
+        )
     }
 
     Column(
@@ -92,44 +164,55 @@ fun OrderList(
             .fillMaxSize()
             .background(backgroundColor),
     ) {
+        val scrollState = rememberScrollState()
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .horizontalScroll(scrollState)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FilterChip(
-                selected = showOnlyActive,
-                onClick = { onToggleShowActive(true) },
-                label = { Text("Tylko aktywne") },
-                leadingIcon = if (showOnlyActive) {
-                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                } else null,
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = orderStyle.container,
-                    selectedLabelColor = orderStyle.onContainer,
-                    selectedLeadingIconColor = orderStyle.primary,
-                ),
+            val filterOptions = listOf(
+                null to "Wszystkie",
+                OrderStatus.ACTIVE to "Aktywne",
+                OrderStatus.COMPLETED to "Zrealizowane",
+                OrderStatus.CANCELLED to "Anulowane",
             )
-            FilterChip(
-                selected = !showOnlyActive,
-                onClick = { onToggleShowActive(false) },
-                label = { Text("Wszystkie zamówienia") },
-                leadingIcon = if (!showOnlyActive) {
-                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                } else null,
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = orderStyle.container,
-                    selectedLabelColor = orderStyle.onContainer,
-                    selectedLeadingIconColor = orderStyle.primary,
-                ),
-            )
+            filterOptions.forEach { (status, label) ->
+                val isSelected = selectedStatus == status
+                FilterChip(
+                    selected = isSelected,
+                    onClick = {
+                        onSelectStatus(status)
+                        onToggleShowActive(status == OrderStatus.ACTIVE)
+                    },
+                    label = { Text(label) },
+                    leadingIcon = if (isSelected) {
+                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                    } else null,
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = orderStyle.container,
+                        selectedLabelColor = orderStyle.onContainer,
+                        selectedLeadingIconColor = orderStyle.primary,
+                    ),
+                )
+            }
         }
 
         if (displayedOrders.isEmpty()) {
-            val emptyTitle = if (showOnlyActive) "Brak aktywnych zamówień" else "Brak zamówień"
-            val emptyDesc = if (showOnlyActive) "Nowe aktywne zamówienia pojawią się tutaj." else "Baza zamówień jest pusta."
+            val emptyTitle = when (selectedStatus) {
+                OrderStatus.ACTIVE -> "Brak aktywnych zamówień"
+                OrderStatus.COMPLETED -> "Brak zrealizowanych zamówień"
+                OrderStatus.CANCELLED -> "Brak anulowanych zamówień"
+                null -> "Brak zamówień"
+            }
+            val emptyDesc = when (selectedStatus) {
+                OrderStatus.ACTIVE -> "Nowe aktywne zamówienia pojawią się tutaj."
+                OrderStatus.COMPLETED -> "Zrealizowane zamówienia pojawią się tutaj."
+                OrderStatus.CANCELLED -> "Anulowane zamówienia pojawią się tutaj."
+                null -> "Baza zamówień jest pusta."
+            }
             EmptyState(
                 title = emptyTitle,
                 message = emptyDesc,
@@ -171,31 +254,48 @@ fun OrderList(
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                     )
-                                    if (order.active) {
-                                        Surface(
-                                            color = orderStyle.container,
-                                            shape = MaterialTheme.shapes.extraSmall,
-                                        ) {
-                                            Text(
-                                                text = "Aktywne",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = orderStyle.onContainer,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                fontWeight = FontWeight.SemiBold,
-                                            )
+                                    when (order.orderStatus) {
+                                        OrderStatus.ACTIVE -> {
+                                            Surface(
+                                                color = orderStyle.container,
+                                                shape = MaterialTheme.shapes.extraSmall,
+                                            ) {
+                                                Text(
+                                                    text = "Aktywne",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = orderStyle.onContainer,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    fontWeight = FontWeight.SemiBold,
+                                                )
+                                            }
                                         }
-                                    } else {
-                                        Surface(
-                                            color = MaterialTheme.colorScheme.errorContainer,
-                                            shape = MaterialTheme.shapes.extraSmall,
-                                        ) {
-                                            Text(
-                                                text = "Nieaktywne",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                fontWeight = FontWeight.Bold,
-                                            )
+                                        OrderStatus.COMPLETED -> {
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.primaryContainer,
+                                                shape = MaterialTheme.shapes.extraSmall,
+                                            ) {
+                                                Text(
+                                                    text = "Zrealizowane",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    fontWeight = FontWeight.SemiBold,
+                                                )
+                                            }
+                                        }
+                                        OrderStatus.CANCELLED -> {
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.errorContainer,
+                                                shape = MaterialTheme.shapes.extraSmall,
+                                            ) {
+                                                Text(
+                                                    text = "Anulowane",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    fontWeight = FontWeight.Bold,
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -209,7 +309,7 @@ fun OrderList(
                                         color = orderStyle.primary,
                                         fontWeight = FontWeight.Bold,
                                     )
-                                    if (onToggleStatus != null || onEditOrder != null || onDeleteOrder != null) {
+                                    if (onUpdateOrderStatus != null || onToggleStatus != null || onEditOrder != null || onDeleteOrder != null) {
                                         IconButton(
                                             onClick = { isActionsExpanded = !isActionsExpanded },
                                             modifier = Modifier.size(32.dp),
@@ -249,15 +349,8 @@ fun OrderList(
                                     fontWeight = FontWeight.Medium,
                                 )
                             }
-                            if (order.remarks.isMeaningful()) {
-                                Text(
-                                    text = order.remarks.trim(),
-                                    modifier = Modifier.padding(top = 8.dp),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
 
-                            if (onToggleStatus != null || onEditOrder != null || onDeleteOrder != null) {
+                            if (onUpdateOrderStatus != null || onToggleStatus != null || onEditOrder != null || onDeleteOrder != null) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
@@ -308,31 +401,23 @@ fun OrderList(
                                             .padding(top = 8.dp),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     ) {
-                                        if (onToggleStatus != null) {
+                                        if (onUpdateOrderStatus != null || onToggleStatus != null) {
                                             OutlinedButton(
-                                                onClick = { onToggleStatus(order, !order.active) },
+                                                onClick = { orderForStatusChange = order },
                                                 modifier = Modifier.weight(1.1f),
-                                                colors = if (order.active) {
-                                                    ButtonDefaults.outlinedButtonColors(
-                                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    )
-                                                } else {
-                                                    ButtonDefaults.outlinedButtonColors(
-                                                        contentColor = orderStyle.primary,
-                                                    )
-                                                },
                                                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
                                             ) {
                                                 Icon(
-                                                    imageVector = if (order.active) Icons.Default.PauseCircle else Icons.Default.CheckCircle,
+                                                    imageVector = when (order.orderStatus) {
+                                                        OrderStatus.ACTIVE -> Icons.Default.PlayCircleOutline
+                                                        OrderStatus.COMPLETED -> Icons.Default.CheckCircle
+                                                        OrderStatus.CANCELLED -> Icons.Default.Cancel
+                                                    },
                                                     contentDescription = null,
                                                     modifier = Modifier.size(16.dp),
                                                 )
                                                 Spacer(Modifier.width(4.dp))
-                                                Text(
-                                                    text = if (order.active) "Zakończ" else "Aktywuj",
-                                                    maxLines = 1,
-                                                )
+                                                Text("Status", maxLines = 1)
                                             }
                                         }
                                         if (onEditOrder != null) {

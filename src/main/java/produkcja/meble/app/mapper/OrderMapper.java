@@ -13,6 +13,7 @@ import produkcja.meble.app.dto.UpdateOrderRequest;
 import produkcja.meble.app.dto.UserResponse;
 import produkcja.meble.app.entity.Order;
 import produkcja.meble.app.entity.OrderItem;
+import produkcja.meble.app.entity.OrderStatus;
 import produkcja.meble.app.entity.Product;
 import produkcja.meble.app.entity.UserAccount;
 
@@ -28,6 +29,7 @@ public interface OrderMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "active", constant = "true")
+    @Mapping(target = "status", expression = "java(createOrderRequest.status() != null ? createOrderRequest.status() : produkcja.meble.app.entity.OrderStatus.ACTIVE)")
     @Mapping(target = "items", ignore = true)
     Order toEntity(CreateOrderRequest createOrderRequest);
 
@@ -35,6 +37,7 @@ public interface OrderMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "active", ignore = true)
+    @Mapping(target = "status", ignore = true)
     @Mapping(target = "items", ignore = true)
     void updateEntityFromRequest(UpdateOrderRequest request, @MappingTarget Order order);
 

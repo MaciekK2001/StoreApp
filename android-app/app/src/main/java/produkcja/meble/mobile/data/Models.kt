@@ -2,6 +2,28 @@ package produkcja.meble.mobile.data
 
 class ApiException(val statusCode: Int, message: String) : Exception(message)
 
+enum class OrderStatus(val displayName: String) {
+    ACTIVE("Aktywne"),
+    COMPLETED("Zrealizowane"),
+    CANCELLED("Anulowane");
+
+    companion object {
+        fun from(value: String?): OrderStatus {
+            if (value.isNullOrBlank()) return ACTIVE
+            val trimmed = value.trim().uppercase()
+            for (status in entries) {
+                if (status.name.equals(trimmed, ignoreCase = true)) {
+                    return status
+                }
+            }
+            if (trimmed.startsWith("ZREALIZOWAN")) return COMPLETED
+            if (trimmed.startsWith("ANULOWAN")) return CANCELLED
+            if (trimmed.startsWith("AKTYWN")) return ACTIVE
+            return ACTIVE
+        }
+    }
+}
+
 data class LoginRequest(
     val username: String,
     val password: String,
@@ -116,9 +138,13 @@ data class FurnitureOrder(
     val carryProductsPrice: Double,
     val carryProductsRemarks: String,
     val active: Boolean,
+    val status: String = "ACTIVE",
     val deposit: Double,
     val items: List<OrderItem>,
-)
+) {
+    val orderStatus: OrderStatus
+        get() = if (!active && status == "ACTIVE") OrderStatus.COMPLETED else OrderStatus.from(status)
+}
 
 data class OrderItemRequest(
     val productId: Long,
@@ -151,6 +177,7 @@ data class CreateOrderRequest(
     val carryProductsRemarks: String? = null,
     val deposit: Double = 0.0,
     val active: Boolean? = true,
+    val status: String? = "ACTIVE",
     val orderItemRequests: List<OrderItemRequest>,
 )
 

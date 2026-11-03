@@ -14,6 +14,7 @@ import produkcja.meble.app.dto.UserResponse;
 import produkcja.meble.app.entity.AccountRole;
 import produkcja.meble.app.entity.Order;
 import produkcja.meble.app.entity.OrderItem;
+import produkcja.meble.app.entity.OrderStatus;
 import produkcja.meble.app.entity.Product;
 import produkcja.meble.app.entity.UserAccount;
 import produkcja.meble.app.exception.ResourceNotFoundException;
@@ -28,8 +29,10 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -61,99 +64,29 @@ class OrderServiceTest {
     }
 
     @Test
-    void saveOrderSuccessfullyCreatesOrder() {
-        Product product = Product.builder().id(1L).price(BigDecimal.valueOf(100)).build();
+    void saveOrderCreatesOrderWithUser() {
+        UserAccount user = UserAccount.builder()
+                .id(10L)
+                .username("testuser")
+                .role(AccountRole.ADMIN)
+                .build();
+        Product product = new Product();
+        product.setPrice(BigDecimal.valueOf(100));
+
         when(orderMapper.toEntity(orderRequest)).thenReturn(order);
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
-        when(orderRepository.save(any(Order.class))).thenReturn(order);
+        when(orderRepository.save(order)).thenReturn(order);
         when(orderMapper.toResponse(order)).thenReturn(orderResponse);
 
-        OrderResponse createdOrder = orderService.saveOrder(orderRequest);
+        OrderResponse result = orderService.saveOrder(orderRequest, user);
 
-        assertNotNull(createdOrder);
-        verify(orderRepository).save(any(Order.class));
-    }
-
-    @Test
-    void saveOrderWithCustomizedOrderItemPreservesCustomAttributes() {
-        OrderItemRequest customItem = OrderItemRequest.builder()
-                .productId(1L)
-                .quantity(2)
-                .price(BigDecimal.valueOf(2500))
-                .length(210.0)
-                .depth(180.0)
-                .height(115.0)
-                .fabric("Velvet Green")
-                .colour("Butelkowa zieleń")
-                .material("Drewno dębowe")
-                .equipment("Pojemnik na pościel")
-                .remarks("Nóżki czarne matowe")
-                .build();
-
-        CreateOrderRequest customRequest = CreateOrderRequest.builder()
-                .deliveryDate(LocalDateTime.now().plusDays(7))
-                .address("Warszawa, Złota 44")
-                .phoneNumber("987654321")
-                .orderItemRequests(List.of(customItem))
-                .build();
-
-        Product catalogProduct = Product.builder()
-                .id(1L)
-                .price(BigDecimal.valueOf(1900))
-                .length(200.0)
-                .depth(160.0)
-                .height(100.0)
-                .fabric("Katalog Standard")
-                .colour("Szary")
-                .material("Sosna")
-                .build();
-
-        Order customOrder = buildTestOrder();
-        when(orderMapper.toEntity(customRequest)).thenReturn(customOrder);
-        when(productRepository.findById(1L)).thenReturn(Optional.of(catalogProduct));
-        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(orderMapper.toResponse(any(Order.class))).thenReturn(orderResponse);
-
-        OrderResponse response = orderService.saveOrder(customRequest);
-
-        assertNotNull(response);
-        assertEquals(1, customOrder.getItems().size());
-        OrderItem savedItem = customOrder.getItems().getFirst();
-        assertEquals(BigDecimal.valueOf(2500), savedItem.getPrice());
-        assertEquals(210.0, savedItem.getLength());
-        assertEquals(180.0, savedItem.getDepth());
-        assertEquals(115.0, savedItem.getHeight());
-        assertEquals("Velvet Green", savedItem.getFabric());
-        assertEquals("Butelkowa zieleń", savedItem.getColour());
-        assertEquals("Drewno dębowe", savedItem.getMaterial());
-        assertEquals("Pojemnik na pościel", savedItem.getEquipment());
-        assertEquals("Nóżki czarne matowe", savedItem.getRemarks());
-    }
-
-    @Test
-    void saveOrderWithUserAccountAssignsCreator() {
-        UserAccount user = UserAccount.builder().id(10L).username("testuser").role(AccountRole.ADMIN).build();
-        Product product = Product.builder().id(1L).price(BigDecimal.valueOf(100)).build();
-        when(orderMapper.toEntity(orderRequest)).thenReturn(order);
-        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
-        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(orderMapper.toResponse(any(Order.class))).thenReturn(
-                OrderResponse.builder()
-                        .id(1L)
-                        .createdBy(UserResponse.from(user))
-                        .build()
-        );
-
-        OrderResponse createdOrder = orderService.saveOrder(orderRequest, user);
-
-        assertNotNull(createdOrder);
-        assertNotNull(createdOrder.createdBy());
-        assertEquals("testuser", createdOrder.createdBy().username());
+        assertNotNull(result);
         assertEquals(user, order.getCreatedBy());
+        verify(orderRepository).save(order);
     }
 
     @Test
-    void saveOrderThrowsWhenProductMissing() {
+    void saveOrderThrowsWhenProductNotFound() {
         when(orderMapper.toEntity(orderRequest)).thenReturn(order);
         when(productRepository.findById(1L)).thenReturn(Optional.empty());
 
@@ -161,32 +94,145 @@ class OrderServiceTest {
     }
 
     @Test
-    void findAllActiveOrdersDelegatesToRepository() {
-        OrderResponse expectedResponse = OrderResponse.builder().id(1L).build();
-        when(orderRepository.findByActiveTrueOrderByCreatedAtDesc()).thenReturn(List.of(order));
-        when(orderMapper.toResponseList(List.of(order))).thenReturn(List.of(expectedResponse));
+    void saveOrderWithCustomizedOrderItemPreservesCustomAttributes() {
+        Product baseProduct = Product.builder()
+                .id(1L)
+                .price(BigDecimal.valueOf(1000))
+                .length(200.0)
+                .depth(90.0)
+                .height(80.0)
+                .colour("Czarny")
+                .material("Drewno")
+                .fabric("Welur")
+                .equipment("Szuflady")
+                .remarks("Standard")
+                .build();
 
-        List<OrderResponse> activeOrders = orderService.findAllActiveOrders();
+        OrderItemRequest customItemRequest = OrderItemRequest.builder()
+                .productId(1L)
+                .quantity(2)
+                .price(BigDecimal.valueOf(1250.50))
+                .length(220.0)
+                .depth(95.0)
+                .height(85.0)
+                .colour("Biały mat")
+                .material("MDF lakierowany")
+                .fabric("Skóra naturalna")
+                .equipment("Cichy domyk, oświetlenie LED")
+                .remarks("Niestandardowe wymiary na zamówienie klienta")
+                .build();
 
-        assertEquals(1, activeOrders.size());
-        assertEquals(expectedResponse, activeOrders.getFirst());
+        CreateOrderRequest requestWithCustomItem = CreateOrderRequest.builder()
+                .deliveryDate(LocalDateTime.now().plusDays(10))
+                .address("Warszawska 5")
+                .phoneNumber("987654321")
+                .orderItemRequests(List.of(customItemRequest))
+                .build();
+
+        Order blankOrder = new Order();
+        when(orderMapper.toEntity(requestWithCustomItem)).thenReturn(blankOrder);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(baseProduct));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderMapper.toResponse(any(Order.class))).thenReturn(orderResponse);
+
+        orderService.saveOrder(requestWithCustomItem);
+
+        assertEquals(1, blankOrder.getItems().size());
+        OrderItem savedItem = blankOrder.getItems().getFirst();
+        assertEquals(baseProduct, savedItem.getProduct());
+        assertEquals(2, savedItem.getQuantity());
+        assertEquals(BigDecimal.valueOf(1250.50), savedItem.getPrice());
+        assertEquals(220.0, savedItem.getLength());
+        assertEquals(95.0, savedItem.getDepth());
+        assertEquals(85.0, savedItem.getHeight());
+        assertEquals("Biały mat", savedItem.getColour());
+        assertEquals("MDF lakierowany", savedItem.getMaterial());
+        assertEquals("Skóra naturalna", savedItem.getFabric());
+        assertEquals("Cichy domyk, oświetlenie LED", savedItem.getEquipment());
+        assertEquals("Niestandardowe wymiary na zamówienie klienta", savedItem.getRemarks());
     }
 
     @Test
-    void updateOrderSuccessfullyUpdatesOrderAndItems() {
+    void findAllActiveOrdersReturnsList() {
+        when(orderRepository.findByActiveTrueOrderByCreatedAtDesc()).thenReturn(List.of(order));
+        when(orderMapper.toResponseList(List.of(order))).thenReturn(List.of(orderResponse));
+
+        List<OrderResponse> result = orderService.findAllActiveOrders();
+
+        assertEquals(1, result.size());
+        verify(orderRepository).findByActiveTrueOrderByCreatedAtDesc();
+    }
+
+    @Test
+    void findOrdersByStatusCallsRepository() {
+        when(orderRepository.findByStatusOrderByCreatedAtDesc(OrderStatus.COMPLETED)).thenReturn(List.of(order));
+        when(orderMapper.toResponseList(List.of(order))).thenReturn(List.of(orderResponse));
+
+        List<OrderResponse> result = orderService.findOrdersByStatus(OrderStatus.COMPLETED);
+
+        assertEquals(1, result.size());
+        verify(orderRepository).findByStatusOrderByCreatedAtDesc(OrderStatus.COMPLETED);
+    }
+
+    @Test
+    void setOrderStatusUpdatesStatusAndActiveStatus() {
+        Order existingOrder = new Order();
+        existingOrder.setStatus(OrderStatus.ACTIVE);
+        existingOrder.setActive(true);
+
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(existingOrder));
+        when(orderRepository.save(existingOrder)).thenReturn(existingOrder);
+        when(orderMapper.toResponse(existingOrder)).thenReturn(orderResponse);
+
+        OrderResponse res = orderService.setOrderStatus(1L, OrderStatus.COMPLETED);
+
+        assertNotNull(res);
+        assertEquals(OrderStatus.COMPLETED, existingOrder.getStatus());
+        assertFalse(existingOrder.isActive());
+
+        orderService.setOrderStatus(1L, OrderStatus.ACTIVE);
+        assertEquals(OrderStatus.ACTIVE, existingOrder.getStatus());
+        assertTrue(existingOrder.isActive());
+
+        orderService.setOrderStatus(1L, OrderStatus.CANCELLED);
+        assertEquals(OrderStatus.CANCELLED, existingOrder.getStatus());
+        assertFalse(existingOrder.isActive());
+    }
+
+    @Test
+    void findAllOrdersReturnsList() {
+        when(orderRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(order));
+        when(orderMapper.toResponseList(List.of(order))).thenReturn(List.of(orderResponse));
+
+        List<OrderResponse> result = orderService.findAllOrders();
+
+        assertEquals(1, result.size());
+        verify(orderRepository).findAllByOrderByCreatedAtDesc();
+    }
+
+    @Test
+    void updateOrderUpdatesFieldsAndItems() {
+        Order existingOrder = new Order();
+        existingOrder.setId(1L);
+        existingOrder.setItems(new ArrayList<>());
+        OrderItem oldItem = new OrderItem();
+        existingOrder.addItem(oldItem);
+
+        Product newProduct = new Product();
+        newProduct.setId(2L);
+        newProduct.setPrice(BigDecimal.valueOf(50));
+
         UpdateOrderRequest updateRequest = UpdateOrderRequest.builder()
-                .deliveryDate(LocalDateTime.now().plusDays(10))
-                .address("Nowy Adres 5")
-                .phoneNumber("555444333")
+                .deliveryDate(LocalDateTime.now().plusDays(5))
+                .address("Nowa 2")
+                .phoneNumber("987654321")
+                .active(false)
                 .orderItemRequests(List.of(new OrderItemRequest(2L, 3)))
                 .build();
 
-        Product newProduct = Product.builder().id(2L).price(BigDecimal.valueOf(300)).build();
-        Order existingOrder = buildTestOrder();
-
         when(orderRepository.findById(1L)).thenReturn(Optional.of(existingOrder));
         when(productRepository.findById(2L)).thenReturn(Optional.of(newProduct));
-        when(orderRepository.save(any(Order.class))).thenReturn(existingOrder);
+        when(orderRepository.save(existingOrder)).thenReturn(existingOrder);
         when(orderMapper.toResponse(existingOrder)).thenReturn(orderResponse);
 
         OrderResponse result = orderService.updateOrder(1L, updateRequest);
@@ -254,6 +300,7 @@ class OrderServiceTest {
                 .address("Testowa 1")
                 .phoneNumber("123456789")
                 .active(true)
+                .status(OrderStatus.ACTIVE)
                 .items(new ArrayList<>())
                 .build();
     }
@@ -264,6 +311,7 @@ class OrderServiceTest {
                 .deliveryDate(LocalDateTime.now().plusDays(7))
                 .address("Testowa 1")
                 .phoneNumber("123456789")
+                .status(OrderStatus.ACTIVE)
                 .build();
     }
 }

@@ -53,6 +53,7 @@ import produkcja.meble.mobile.MainSection
 import produkcja.meble.mobile.data.CreateOrderRequest
 import produkcja.meble.mobile.data.CreateProductRequest
 import produkcja.meble.mobile.data.FurnitureOrder
+import produkcja.meble.mobile.data.OrderStatus
 import produkcja.meble.mobile.data.Product
 import produkcja.meble.mobile.ui.auth.AuthScreen
 import produkcja.meble.mobile.ui.common.ConfirmDeleteDialog
@@ -118,6 +119,19 @@ fun FurnitureApp(viewModel: FurnitureViewModel) {
                     onUpdateOrder = viewModel::updateOrder,
                     onDeleteOrder = viewModel::deleteOrder,
                     onToggleOrderStatus = viewModel::setOrderStatus,
+                    onUpdateOrderStatus = { order, status ->
+                        viewModel.setOrderStatus(
+                            order = order,
+                            status = status,
+                            onSuccess = { msg ->
+                                coroutineScope.launch { snackbar.showSnackbar(msg) }
+                            },
+                            onError = { msg ->
+                                coroutineScope.launch { snackbar.showSnackbar(msg) }
+                            },
+                        )
+                    },
+                    onSelectOrderStatusFilter = viewModel::setSelectedOrderStatusFilter,
                     onToggleShowActiveOrders = viewModel::setShowOnlyActiveOrders,
                 )
             }
@@ -143,6 +157,8 @@ private fun Dashboard(
     onUpdateOrder: (Long, CreateOrderRequest, (String) -> Unit, (String) -> Unit) -> Unit,
     onDeleteOrder: (FurnitureOrder, (String) -> Unit, (String) -> Unit) -> Unit,
     onToggleOrderStatus: (FurnitureOrder, Boolean, (String) -> Unit, (String) -> Unit) -> Unit,
+    onUpdateOrderStatus: (FurnitureOrder, OrderStatus) -> Unit,
+    onSelectOrderStatusFilter: (OrderStatus?) -> Unit,
     onToggleShowActiveOrders: (Boolean) -> Unit,
 ) {
     val selectedOrder = state.selectedOrder
@@ -348,6 +364,7 @@ private fun Dashboard(
                                 order = order,
                                 onEditOrder = { orderToEdit = it },
                                 onDeleteOrder = { orderToDelete = it },
+                                onUpdateOrderStatus = onUpdateOrderStatus,
                                 onToggleStatus = { o, active ->
                                     onToggleOrderStatus(
                                         o,
@@ -379,11 +396,14 @@ private fun Dashboard(
                     "orders" -> {
                         OrderList(
                             orders = state.orders,
+                            selectedStatus = state.selectedOrderStatusFilter,
+                            onSelectStatus = onSelectOrderStatusFilter,
                             showOnlyActive = state.showOnlyActiveOrders,
                             onToggleShowActive = onToggleShowActiveOrders,
                             onOrderSelected = onOrderSelected,
                             onEditOrder = { orderToEdit = it },
                             onDeleteOrder = { orderToDelete = it },
+                            onUpdateOrderStatus = onUpdateOrderStatus,
                             onToggleStatus = { order, active ->
                                 onToggleOrderStatus(
                                     order,

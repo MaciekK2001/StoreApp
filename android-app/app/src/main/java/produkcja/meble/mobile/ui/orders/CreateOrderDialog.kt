@@ -49,6 +49,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import produkcja.meble.mobile.data.OrderStatus
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -189,8 +191,8 @@ fun OrderFormDialog(
     }
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
 
-    // Active status
-    var active by rememberSaveable { mutableStateOf(initialOrder?.active ?: true) }
+    // Order status
+    var orderStatus by rememberSaveable { mutableStateOf(initialOrder?.orderStatus ?: OrderStatus.ACTIVE) }
 
     // Additional options
     var assemblyPrice by rememberSaveable {
@@ -389,45 +391,58 @@ fun OrderFormDialog(
                         }
                     }
 
-                    // Status Switch
+                    // Status Selection
                     Card(
                         colors = CardDefaults.cardColors(
-                            containerColor = if (active) {
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-                            } else {
-                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                            containerColor = when (orderStatus) {
+                                OrderStatus.ACTIVE -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                                OrderStatus.COMPLETED -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                OrderStatus.CANCELLED -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
                             },
                         ),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (active) "Status: Aktywne" else "Status: Nieaktywne",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                                Text(
-                                    text = if (active) {
-                                        "Zamówienie widoczne jako aktywne w realizacji"
-                                    } else {
-                                        "Zamówienie oznaczone jako zakończone / nieaktywne"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Switch(
-                                checked = active,
-                                onCheckedChange = { active = it },
-                                enabled = !isSubmitting,
+                            Text(
+                                text = "Status zamówienia",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
                             )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                OrderStatus.entries.forEach { statusOption ->
+                                    val isSelected = orderStatus == statusOption
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { orderStatus = statusOption },
+                                        label = {
+                                            Text(
+                                                text = statusOption.displayName,
+                                                maxLines = 1,
+                                                style = MaterialTheme.typography.labelMedium,
+                                            )
+                                        },
+                                        leadingIcon = if (isSelected) {
+                                            {
+                                                Icon(
+                                                    Icons.Default.Check,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp),
+                                                )
+                                            }
+                                        } else null,
+                                        enabled = !isSubmitting,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -1057,7 +1072,8 @@ fun OrderFormDialog(
                                 carryProductsPrice = parsedCarryPrice,
                                 carryProductsRemarks = carryProductsRemarks.trim().takeIf { it.isNotBlank() },
                                 deposit = parsedDeposit,
-                                active = active,
+                                active = (orderStatus == OrderStatus.ACTIVE),
+                                status = orderStatus.name,
                                 orderItemRequests = orderItems.map { item ->
                                     OrderItemRequest(
                                         productId = item.baseProduct.id,

@@ -24,13 +24,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.PauseCircle
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -39,11 +39,14 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -54,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import produkcja.meble.mobile.data.FurnitureOrder
 import produkcja.meble.mobile.data.OrderItem
+import produkcja.meble.mobile.data.OrderStatus
 import produkcja.meble.mobile.ui.common.DetailRow
 import produkcja.meble.mobile.ui.common.OptionalDetailRow
 import produkcja.meble.mobile.ui.common.dateTime
@@ -67,16 +71,78 @@ fun OrderDetails(
     onEditOrder: ((FurnitureOrder) -> Unit)? = null,
     onDeleteOrder: ((FurnitureOrder) -> Unit)? = null,
     onToggleStatus: ((FurnitureOrder, Boolean) -> Unit)? = null,
+    onUpdateOrderStatus: ((FurnitureOrder, OrderStatus) -> Unit)? = null,
 ) {
     val isDark = isSystemInDarkTheme()
     val orderStyle = orderSectionStyle(isDark)
     val backgroundColor = orderListBackgroundColor(isDark)
+
+    var showStatusDialog by rememberSaveable { mutableStateOf(false) }
 
     val itemsTotal = order.items.sumOf { it.price * it.quantity }
     val servicesTotal = order.assemblyPrice + order.transportPrice + order.carryProductsPrice
     val subtotalBeforeDiscount = itemsTotal + servicesTotal
     val totalOrderPrice = (subtotalBeforeDiscount - order.discount).coerceAtLeast(0.0)
     val remainingToPay = (totalOrderPrice - order.deposit).coerceAtLeast(0.0)
+
+    if (showStatusDialog) {
+        AlertDialog(
+            onDismissRequest = { showStatusDialog = false },
+            title = {
+                Text(
+                    text = "Zmień status zamówienia #${order.id}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OrderStatus.entries.forEach { statusOption ->
+                        val isSelected = order.orderStatus == statusOption
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    if (onUpdateOrderStatus != null) {
+                                        onUpdateOrderStatus(order, statusOption)
+                                    } else if (onToggleStatus != null) {
+                                        onToggleStatus(order, statusOption == OrderStatus.ACTIVE)
+                                    }
+                                    showStatusDialog = false
+                                }
+                                .padding(horizontal = 8.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = {
+                                    if (onUpdateOrderStatus != null) {
+                                        onUpdateOrderStatus(order, statusOption)
+                                    } else if (onToggleStatus != null) {
+                                        onToggleStatus(order, statusOption == OrderStatus.ACTIVE)
+                                    }
+                                    showStatusDialog = false
+                                },
+                            )
+                            Text(
+                                text = statusOption.displayName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showStatusDialog = false }) {
+                    Text("Anuluj")
+                }
+            },
+        )
+    }
 
     LazyColumn(
         contentPadding = PaddingValues(18.dp),
@@ -87,18 +153,38 @@ fun OrderDetails(
     ) {
         // Status Card
         item {
+            val (statusTitle, statusDesc, statusIcon, statusColor, statusBg) = when (order.orderStatus) {
+                OrderStatus.ACTIVE -> StatusPresentation(
+                    title = "Aktywne (w realizacji)",
+                    description = "To zamówienie jest obecnie aktywne i w trakcie realizacji.",
+                    icon = Icons.Default.CheckCircle,
+                    color = orderStyle.primary,
+                    container = orderStyle.container.copy(alpha = 0.65f),
+                )
+                OrderStatus.COMPLETED -> StatusPresentation(
+                    title = "Zrealizowane",
+                    description = "To zamówienie zostało pomyślnie zrealizowane i zakończone.",
+                    icon = Icons.Default.CheckCircle,
+                    color = MaterialTheme.colorScheme.primary,
+                    container = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+                )
+                OrderStatus.CANCELLED -> StatusPresentation(
+                    title = "Anulowane",
+                    description = "To zamówienie zostało anulowane.",
+                    icon = Icons.Default.Cancel,
+                    color = MaterialTheme.colorScheme.error,
+                    container = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.65f),
+                )
+            }
+
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = if (order.active) {
-                        orderStyle.container.copy(alpha = 0.65f)
-                    } else {
-                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
-                    },
+                    containerColor = statusBg,
                 ),
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(
                     1.dp,
-                    if (order.active) orderStyle.accent.copy(alpha = 0.5f) else MaterialTheme.colorScheme.error.copy(alpha = 0.5f),
+                    statusColor.copy(alpha = 0.5f),
                 ),
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -115,40 +201,36 @@ fun OrderDetails(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Icon(
-                                imageVector = if (order.active) Icons.Default.CheckCircle else Icons.Default.PauseCircle,
+                                imageVector = statusIcon,
                                 contentDescription = null,
-                                tint = if (order.active) orderStyle.primary else MaterialTheme.colorScheme.error,
+                                tint = statusColor,
                                 modifier = Modifier.size(24.dp),
                             )
                             Text(
-                                text = if (order.active) "Aktywne (w realizacji)" else "Nieaktywne (zakończone)",
+                                text = statusTitle,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = if (order.active) orderStyle.primary else MaterialTheme.colorScheme.error,
+                                color = statusColor,
                             )
                         }
                         Text(
-                            text = if (order.active) {
-                                "To zamówienie jest obecnie aktywne i widoczne w realizacji."
-                            } else {
-                                "To zamówienie zostało oznaczone jako zakończone lub wstrzymane."
-                            },
+                            text = statusDesc,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp),
                         )
                     }
 
-                    if (onToggleStatus != null) {
+                    if (onUpdateOrderStatus != null || onToggleStatus != null) {
                         Spacer(Modifier.width(12.dp))
                         FilledTonalButton(
-                            onClick = { onToggleStatus(order, !order.active) },
+                            onClick = { showStatusDialog = true },
                             colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = if (order.active) MaterialTheme.colorScheme.errorContainer else orderStyle.container,
-                                contentColor = if (order.active) MaterialTheme.colorScheme.onErrorContainer else orderStyle.primary,
+                                containerColor = statusColor.copy(alpha = 0.18f),
+                                contentColor = statusColor,
                             ),
                         ) {
-                            Text(if (order.active) "Zakończ" else "Wznów")
+                            Text("Zmień status")
                         }
                     }
                 }
@@ -422,6 +504,14 @@ fun OrderDetails(
         }
     }
 }
+
+private data class StatusPresentation(
+    val title: String,
+    val description: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val color: Color,
+    val container: Color,
+)
 
 @Composable
 private fun OrderItemCard(item: OrderItem, orderStyle: SectionStyle) {

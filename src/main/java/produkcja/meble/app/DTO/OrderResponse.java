@@ -1,6 +1,7 @@
 package produkcja.meble.app.dto;
 
 import lombok.Builder;
+import produkcja.meble.app.entity.OrderStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -26,6 +27,7 @@ public record OrderResponse(
         BigDecimal carryProductsPrice,
         String carryProductsRemarks,
         boolean active,
+        OrderStatus status,
         BigDecimal deposit,
         List<OrderItemResponse> items
 ) {
