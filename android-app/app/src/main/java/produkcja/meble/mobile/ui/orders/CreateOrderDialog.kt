@@ -8,6 +8,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +34,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddShoppingCart
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.PlayCircleOutline
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
+import produkcja.meble.mobile.ui.theme.orderSectionStyle
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -392,55 +400,109 @@ fun OrderFormDialog(
                     }
 
                     // Status Selection
+                    val isDark = isSystemInDarkTheme()
+                    val orderStyle = orderSectionStyle(isDark)
+
                     Card(
                         colors = CardDefaults.cardColors(
-                            containerColor = when (orderStatus) {
-                                OrderStatus.ACTIVE -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-                                OrderStatus.COMPLETED -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-                                OrderStatus.CANCELLED -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
-                            },
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                         ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Text(
-                                text = "Status zamówienia",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "Status zamówienia",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    text = orderStatus.displayName,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = when (orderStatus) {
+                                        OrderStatus.ACTIVE -> orderStyle.primary
+                                        OrderStatus.COMPLETED -> MaterialTheme.colorScheme.primary
+                                        OrderStatus.CANCELLED -> MaterialTheme.colorScheme.error
+                                    },
+                                )
+                            }
+
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 OrderStatus.entries.forEach { statusOption ->
                                     val isSelected = orderStatus == statusOption
-                                    FilterChip(
+                                    val (activeColor, activeContainer) = when (statusOption) {
+                                        OrderStatus.ACTIVE -> Pair(
+                                            orderStyle.primary,
+                                            orderStyle.container.copy(alpha = 0.7f),
+                                        )
+                                        OrderStatus.COMPLETED -> Pair(
+                                            MaterialTheme.colorScheme.primary,
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                                        )
+                                        OrderStatus.CANCELLED -> Pair(
+                                            MaterialTheme.colorScheme.error,
+                                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                                        )
+                                    }
+                                    val icon = when (statusOption) {
+                                        OrderStatus.ACTIVE -> Icons.Default.PlayCircleOutline
+                                        OrderStatus.COMPLETED -> Icons.Default.CheckCircle
+                                        OrderStatus.CANCELLED -> Icons.Default.Cancel
+                                    }
+
+                                    Surface(
                                         selected = isSelected,
-                                        onClick = { orderStatus = statusOption },
-                                        label = {
+                                        onClick = { if (!isSubmitting) orderStatus = statusOption },
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = if (isSelected) activeContainer else MaterialTheme.colorScheme.surface,
+                                        border = BorderStroke(
+                                            width = if (isSelected) 2.dp else 1.dp,
+                                            color = if (isSelected) activeColor else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(68.dp),
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(horizontal = 4.dp, vertical = 6.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center,
+                                        ) {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = null,
+                                                tint = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(22.dp),
+                                            )
+                                            Spacer(Modifier.height(4.dp))
                                             Text(
                                                 text = statusOption.displayName,
+                                                fontSize = 12.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
                                                 maxLines = 1,
-                                                style = MaterialTheme.typography.labelMedium,
+                                                overflow = TextOverflow.Ellipsis,
+                                                textAlign = TextAlign.Center,
                                             )
-                                        },
-                                        leadingIcon = if (isSelected) {
-                                            {
-                                                Icon(
-                                                    Icons.Default.Check,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(16.dp),
-                                                )
-                                            }
-                                        } else null,
-                                        enabled = !isSubmitting,
-                                        modifier = Modifier.weight(1f),
-                                    )
+                                        }
+                                    }
                                 }
                             }
                         }
