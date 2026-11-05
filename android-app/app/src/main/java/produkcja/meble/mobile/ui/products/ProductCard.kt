@@ -349,6 +349,9 @@ fun ProductCard(
 
             Spacer(Modifier.height(10.dp))
             DetailRow("Wymiary", "${number(product.length)} × ${number(product.depth)} × ${number(product.height)} cm")
+            product.leadTimeWeeks?.takeIf { it > 0 }?.let { weeks ->
+                DetailRow("Czas realizacji", "$weeks tyg.")
+            }
             DetailRow("Kolor", product.colour)
             DetailRow("Materiał", product.material)
             if (product.fabric.isMeaningful()) {
@@ -471,6 +474,7 @@ private fun ProductCardPreview() {
             remarks = "Z funkcją spania",
             equipment = "Pojemnik na pościel, 2 poduszki",
             imageUrl = null,
+            leadTimeWeeks = 3,
         ),
     )
 }

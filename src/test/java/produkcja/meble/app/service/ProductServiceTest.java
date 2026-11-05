@@ -57,6 +57,7 @@ class ProductServiceTest {
 
     @Test
     void saveProductPersistsAndReturnsMappedProduct() {
+        when(productRepository.existsByModelIgnoreCase("Test model")).thenReturn(false);
         when(productMapper.toEntity(productRequest)).thenReturn(product);
         when(productRepository.save(product)).thenReturn(savedProduct);
         when(productMapper.toResponse(savedProduct)).thenReturn(productResponse);
@@ -67,6 +68,15 @@ class ProductServiceTest {
         assertEquals(1L, result.id());
         assertEquals("Test model", result.model());
         verify(productRepository).save(product);
+    }
+
+    @Test
+    void saveProductThrowsConflictExceptionWhenModelAlreadyExists() {
+        when(productRepository.existsByModelIgnoreCase("Test model")).thenReturn(true);
+
+        ConflictException ex = assertThrows(ConflictException.class, () -> productService.saveProduct(productRequest));
+        assertTrue(ex.getMessage().contains("już istnieje"));
+        verify(productRepository, never()).save(any());
     }
 
     @Test
@@ -113,6 +123,7 @@ class ProductServiceTest {
         ProductResponse response = buildTestProductResponse(1L, "Updated model", BigDecimal.valueOf(1500));
 
         when(productRepository.findById(1L)).thenReturn(Optional.of(existingProduct));
+        when(productRepository.existsByModelIgnoreCaseAndIdNot("Updated model", 1L)).thenReturn(false);
         doAnswer(invocation -> {
             existingProduct.setModel("Updated model");
             existingProduct.setPrice(BigDecimal.valueOf(1500));
@@ -126,6 +137,20 @@ class ProductServiceTest {
         assertEquals("Updated model", result.model());
         assertEquals(0, BigDecimal.valueOf(1500).compareTo(result.price()));
         verify(productRepository).save(existingProduct);
+    }
+
+    @Test
+    void updateProductThrowsConflictExceptionWhenModelAlreadyExistsForOtherProduct() {
+        Product existingProduct = buildTestProduct("Old model", BigDecimal.valueOf(1200));
+        existingProduct.setId(1L);
+        ProductRequest request = buildTestProductRequest("Updated model", BigDecimal.valueOf(1500));
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(existingProduct));
+        when(productRepository.existsByModelIgnoreCaseAndIdNot("Updated model", 1L)).thenReturn(true);
+
+        ConflictException ex = assertThrows(ConflictException.class, () -> productService.updateProduct(1L, request));
+        assertTrue(ex.getMessage().contains("już istnieje"));
+        verify(productRepository, never()).save(any());
     }
 
     @Test

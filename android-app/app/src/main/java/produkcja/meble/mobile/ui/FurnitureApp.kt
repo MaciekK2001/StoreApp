@@ -431,6 +431,7 @@ private fun Dashboard(
     if (showCreateProductDialog) {
         ProductFormDialog(
             initialProduct = null,
+            existingProducts = state.products,
             onDismiss = { showCreateProductDialog = false },
             onSave = { request, imageBytes, fileName, mimeType, additionalImagesBytes, onDialogSuccess, onDialogError ->
                 onCreateProduct(
@@ -458,6 +459,7 @@ private fun Dashboard(
     productToEdit?.let { product ->
         ProductFormDialog(
             initialProduct = product,
+            existingProducts = state.products,
             onDismiss = { productToEdit = null },
             onSave = { request, imageBytes, fileName, mimeType, additionalImagesBytes, onDialogSuccess, onDialogError ->
                 onUpdateProduct(

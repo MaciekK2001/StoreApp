@@ -226,7 +226,7 @@ fun ProductFilter(
                         }
                     }
 
-                    // Wymiary (Długość, Głębokość, Wysokość)
+                    // Wymiary (Długość, Głębokość / Szerokość, Wysokość)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             text = "Wymiary (cm)",
@@ -241,7 +241,7 @@ fun ProductFilter(
                             onMaxChange = { onFilterChange(filter.copy(maxLength = it)) },
                         )
                         DimensionFilterRow(
-                            label = "Głębokość",
+                            label = "Głęb. / Szer.",
                             minValue = filter.minDepth,
                             onMinChange = { onFilterChange(filter.copy(minDepth = it)) },
                             maxValue = filter.maxDepth,
@@ -357,7 +357,7 @@ fun DimensionFilterRow(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.width(76.dp),
+            modifier = Modifier.width(96.dp),
         )
         NumberFilterField(
             value = minValue,

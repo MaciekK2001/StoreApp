@@ -35,7 +35,7 @@ public class Product {
 
     private String colour;
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String model;
 
     @Enumerated(EnumType.STRING)
@@ -50,6 +50,9 @@ public class Product {
     private String equipment;
 
     private String imageUrl;
+
+    @Column(name = "lead_time_weeks")
+    private Integer leadTimeWeeks;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "product_additional_images", joinColumns = @JoinColumn(name = "product_id"))

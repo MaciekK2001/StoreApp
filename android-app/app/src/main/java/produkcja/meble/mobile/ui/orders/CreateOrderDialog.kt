@@ -82,6 +82,10 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -109,6 +113,56 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+
+private data class ParsedAddress(
+    val postalCode: String,
+    val city: String,
+    val street: String,
+    val houseNumber: String,
+)
+
+private fun parseAddress(raw: String?): ParsedAddress {
+    if (raw.isNullOrBlank()) {
+        return ParsedAddress("", "", "", "")
+    }
+    val postalRegex = Regex("""\b(\d{2}-\d{3})\b""")
+    val match = postalRegex.find(raw)
+    var postalCode = ""
+    var city = ""
+    var streetPart = ""
+
+    if (match != null) {
+        postalCode = match.groupValues[1]
+        val beforePostal = raw.substring(0, match.range.first).trim().trimEnd(',', ' ')
+        val afterPostal = raw.substring(match.range.last + 1).trim().trimStart(',', ' ')
+        streetPart = beforePostal
+        city = afterPostal
+    } else {
+        val parts = raw.split(",").map { it.trim() }
+        if (parts.size >= 2) {
+            streetPart = parts[0]
+            city = parts.drop(1).joinToString(", ")
+        } else {
+            streetPart = raw.trim()
+        }
+    }
+
+    val numberRegex = Regex("""\s+(\d+[\w\s/-]*)$""")
+    val numMatch = numberRegex.find(streetPart)
+    var street = streetPart
+    var houseNumber = ""
+    if (numMatch != null) {
+        houseNumber = numMatch.groupValues[1].trim()
+        street = streetPart.substring(0, numMatch.range.first).trim()
+    }
+
+    return ParsedAddress(
+        postalCode = postalCode,
+        city = city,
+        street = street,
+        houseNumber = houseNumber,
+    )
+}
 
 private fun String.parseAmount(): Double {
     val clean = this.replace(',', '.').replace(" ", "").trim()
@@ -173,7 +227,11 @@ fun OrderFormDialog(
     ) -> Unit,
 ) {
     // Delivery & customer fields
-    var address by rememberSaveable { mutableStateOf(initialOrder?.address.orEmpty()) }
+    val initialParsedAddress = remember(initialOrder) { parseAddress(initialOrder?.address) }
+    var street by rememberSaveable { mutableStateOf(initialParsedAddress.street) }
+    var houseNumber by rememberSaveable { mutableStateOf(initialParsedAddress.houseNumber) }
+    var postalCode by rememberSaveable { mutableStateOf(initialParsedAddress.postalCode) }
+    var city by rememberSaveable { mutableStateOf(initialParsedAddress.city) }
     var phoneNumber by rememberSaveable { mutableStateOf(initialOrder?.phoneNumber.orEmpty()) }
     var fulfillmentTime by rememberSaveable {
         mutableStateOf(initialOrder?.fulfillmentTime?.toString() ?: "14")
@@ -310,7 +368,11 @@ fun OrderFormDialog(
         }
     }
 
-    val isAddressValid = address.trim().isNotBlank()
+    val isPostalCodeValid = Regex("""^\d{2}-\d{3}$""").matches(postalCode.trim())
+    val isCityValid = city.trim().isNotBlank()
+    val isStreetValid = street.trim().isNotBlank()
+    val isHouseNumberValid = houseNumber.trim().isNotBlank()
+    val isAddressValid = isPostalCodeValid && isCityValid && isStreetValid && isHouseNumberValid
     val isPhoneValid = phoneNumber.trim().isNotBlank()
     val isDeliveryDateValid = initialOrder != null || !deliveryDate.isBefore(LocalDate.now())
     val hasItems = orderItems.isNotEmpty()
@@ -800,17 +862,79 @@ fun OrderFormDialog(
                                     .clickable { showDatePicker = true },
                             )
 
-                            // Adres
-                            OutlinedTextField(
-                                value = address,
-                                onValueChange = { address = it },
-                                label = { Text("Adres dostawy *") },
-                                isError = attemptedSubmit && !isAddressValid,
-                                supportingText = if (attemptedSubmit && !isAddressValid) {
-                                    { Text("Adres dostawy jest wymagany") }
-                                } else null,
-                                modifier = Modifier.fillMaxWidth(),
+                            // Adres dostawy rozbity na 4 pola wymagane
+                            Text(
+                                text = "Adres dostawy *",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
                             )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                OutlinedTextField(
+                                    value = street,
+                                    onValueChange = { street = it },
+                                    label = { Text("Ulica *") },
+                                    placeholder = { Text("np. Marszałkowska") },
+                                    isError = attemptedSubmit && !isStreetValid,
+                                    supportingText = if (attemptedSubmit && !isStreetValid) {
+                                        { Text("Wymagane") }
+                                    } else null,
+                                    modifier = Modifier.weight(2f),
+                                    singleLine = true,
+                                )
+                                OutlinedTextField(
+                                    value = houseNumber,
+                                    onValueChange = { houseNumber = it },
+                                    label = { Text("Nr *") },
+                                    placeholder = { Text("np. 10/4") },
+                                    isError = attemptedSubmit && !isHouseNumberValid,
+                                    supportingText = if (attemptedSubmit && !isHouseNumberValid) {
+                                        { Text("Wymagane") }
+                                    } else null,
+                                    modifier = Modifier.weight(1.2f),
+                                    singleLine = true,
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                OutlinedTextField(
+                                    value = postalCode,
+                                    onValueChange = { input ->
+                                        val digits = input.filter { it.isDigit() }.take(5)
+                                        postalCode = when {
+                                            digits.length <= 2 -> digits
+                                            else -> "${digits.substring(0, 2)}-${digits.substring(2)}"
+                                        }
+                                    },
+                                    label = { Text("Kod pocztowy *") },
+                                    placeholder = { Text("00-000") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    isError = attemptedSubmit && !isPostalCodeValid,
+                                    supportingText = if (attemptedSubmit && !isPostalCodeValid) {
+                                        { Text("Format: 00-000") }
+                                    } else null,
+                                    modifier = Modifier.weight(1.3f),
+                                    singleLine = true,
+                                )
+                                OutlinedTextField(
+                                    value = city,
+                                    onValueChange = { city = it },
+                                    label = { Text("Miejscowość *") },
+                                    placeholder = { Text("np. Warszawa") },
+                                    isError = attemptedSubmit && !isCityValid,
+                                    supportingText = if (attemptedSubmit && !isCityValid) {
+                                        { Text("Wymagane") }
+                                    } else null,
+                                    modifier = Modifier.weight(2f),
+                                    singleLine = true,
+                                )
+                            }
 
                             // Telefon
                             OutlinedTextField(
@@ -1118,12 +1242,13 @@ fun OrderFormDialog(
                             errorMessage = null
                             isSubmitting = true
 
+                            val combinedAddress = "${street.trim()} ${houseNumber.trim()}, ${postalCode.trim()} ${city.trim()}"
                             val request = CreateOrderRequest(
                                 deliveryDate = "${deliveryDate}T12:00:00",
                                 phoneNumber = phoneNumber.trim(),
                                 fulfillmentTime = fulfillmentTime.toIntOrNull() ?: 14,
                                 contactRemarks = contactRemarks.trim().takeIf { it.isNotBlank() },
-                                address = address.trim(),
+                                address = combinedAddress,
                                 assemblyPrice = parsedAssemblyPrice,
                                 assemblyRemarks = assemblyRemarks.trim().takeIf { it.isNotBlank() },
                                 discount = parsedDiscount,
@@ -1233,6 +1358,7 @@ fun OrderFormDialog(
     if (showCreateProductDialog && onCreateProduct != null) {
         ProductFormDialog(
             initialProduct = null,
+            existingProducts = products,
             onDismiss = { showCreateProductDialog = false },
             onSave = { req, imgBytes, fileName, mime, extraBytes, onSucc, onErr ->
                 onCreateProduct(
@@ -1451,7 +1577,7 @@ private fun CustomizeOrderItemDialog(
 
                     // Wymiary mebla
                     Text(
-                        text = "Wymiary (długość × głębokość × wysokość w cm)",
+                        text = "Wymiary (dł. × gł./szer. × wys. w cm)",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                     )
@@ -1469,7 +1595,7 @@ private fun CustomizeOrderItemDialog(
                         OutlinedTextField(
                             value = depthText,
                             onValueChange = { depthText = it },
-                            label = { Text("Głębokość") },
+                            label = { Text("Gł./Szer.") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.weight(1f),
                         )
@@ -1712,6 +1838,8 @@ private fun ProductPickerDialog(
     onAddProduct: (Product) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val coroutineScope = rememberCoroutineScope()
+    val recentlyAddedIds = remember { mutableStateMapOf<Long, Boolean>() }
     var searchQuery by rememberSaveable { mutableStateOf("") }
 
     val filteredProducts = remember(products, searchQuery) {
@@ -1839,14 +1967,36 @@ private fun ProductPickerDialog(
                                         )
                                     }
 
+                                    val isJustAdded = recentlyAddedIds[product.id] == true
                                     Button(
-                                        onClick = { onAddProduct(product) },
+                                        onClick = {
+                                            onAddProduct(product)
+                                            coroutineScope.launch {
+                                                recentlyAddedIds[product.id] = true
+                                                delay(900)
+                                                recentlyAddedIds.remove(product.id)
+                                            }
+                                        },
+                                        colors = if (isJustAdded) {
+                                            ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            )
+                                        } else {
+                                            ButtonDefaults.buttonColors()
+                                        },
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                         modifier = Modifier.height(36.dp),
                                     ) {
-                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text("Dodaj")
+                                        if (isJustAdded) {
+                                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("Dodano!")
+                                        } else {
+                                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("Dodaj")
+                                        }
                                     }
                                 }
                             }

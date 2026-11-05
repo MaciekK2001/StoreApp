@@ -31,7 +31,13 @@ public class ProductService {
 
     @Transactional
     public ProductResponse saveProduct(ProductRequest request) {
+        String trimmedModel = request.model() != null ? request.model().trim() : "";
+        if (StringUtils.hasText(trimmedModel) && productRepository.existsByModelIgnoreCase(trimmedModel)) {
+            throw new ConflictException("Produkt o modelu '" + trimmedModel + "' już istnieje. Nazwa modelu musi być unikalna.");
+        }
+
         Product product = productMapper.toEntity(request);
+        product.setModel(trimmedModel);
         if (request.additionalImages() != null) {
             product.setAdditionalImages(new ArrayList<>(request.additionalImages()));
         } else if (product.getAdditionalImages() == null) {
@@ -64,12 +70,18 @@ public class ProductService {
     @Transactional
     public ProductResponse updateProduct(Long id, ProductRequest request) {
         Product product = findEntityById(id);
+        String trimmedModel = request.model() != null ? request.model().trim() : "";
+        if (StringUtils.hasText(trimmedModel) && productRepository.existsByModelIgnoreCaseAndIdNot(trimmedModel, id)) {
+            throw new ConflictException("Produkt o modelu '" + trimmedModel + "' już istnieje. Nazwa modelu musi być unikalna.");
+        }
+
         String oldImageUrl = product.getImageUrl();
         List<String> oldAdditionalImages = new ArrayList<>(
                 product.getAdditionalImages() != null ? product.getAdditionalImages() : List.of()
         );
 
         productMapper.updateEntityFromRequest(request, product);
+        product.setModel(trimmedModel);
         if (request.additionalImages() != null) {
             product.setAdditionalImages(new ArrayList<>(request.additionalImages()));
         } else if (product.getAdditionalImages() == null) {

@@ -60,6 +60,7 @@ data class Product(
     val equipment: String,
     val imageUrl: String? = null,
     val additionalImages: List<String> = emptyList(),
+    val leadTimeWeeks: Int? = null,
 ) {
     val allImages: List<String>
         get() = listOfNotNull(imageUrl.takeIf { !it.isNullOrBlank() }) + additionalImages.filter { it.isNotBlank() }
@@ -79,6 +80,7 @@ data class CreateProductRequest(
     val equipment: String,
     val imageUrl: String? = null,
     val additionalImages: List<String> = emptyList(),
+    val leadTimeWeeks: Int? = null,
 )
 
 data class OrderItem(

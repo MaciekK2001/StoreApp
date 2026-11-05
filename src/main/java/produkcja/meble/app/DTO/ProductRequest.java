@@ -40,6 +40,9 @@ public record ProductRequest(
 
         String imageUrl,
 
-        List<String> additionalImages
+        List<String> additionalImages,
+
+        @PositiveOrZero(message = "Lead time weeks must be greater than or equal to 0")
+        Integer leadTimeWeeks
 ) {
 }

@@ -103,6 +103,7 @@ private sealed interface ExtraImageItem {
 @Composable
 fun ProductFormDialog(
     initialProduct: Product? = null,
+    existingProducts: List<Product> = emptyList(),
     onDismiss: () -> Unit,
     onSave: (
         request: CreateProductRequest,
@@ -137,6 +138,9 @@ fun ProductFormDialog(
     var price by rememberSaveable {
         mutableStateOf(initialProduct?.price?.takeIf { it > 0.0 }?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }.orEmpty())
     }
+    var leadTimeWeeks by rememberSaveable {
+        mutableStateOf(initialProduct?.leadTimeWeeks?.toString().orEmpty())
+    }
 
     var colour by rememberSaveable { mutableStateOf(initialProduct?.colour.orEmpty()) }
     var fabric by rememberSaveable { mutableStateOf(initialProduct?.fabric.orEmpty()) }
@@ -163,7 +167,13 @@ fun ProductFormDialog(
     var isSaving by rememberSaveable { mutableStateOf(false) }
     var apiErrorMessage by rememberSaveable { mutableStateOf<String?>(null) }
 
-    val isModelValid = model.trim().isNotBlank()
+    val isModelDuplicate = remember(model, existingProducts, initialProduct) {
+        val trimmed = model.trim()
+        trimmed.isNotEmpty() && existingProducts.any {
+            it.id != initialProduct?.id && it.model.trim().equals(trimmed, ignoreCase = true)
+        }
+    }
+    val isModelValid = model.trim().isNotBlank() && !isModelDuplicate
     val isLengthValid = length.trim().toDoubleOrNull()?.let { it > 0 } ?: false
     val isDepthValid = depth.trim().toDoubleOrNull()?.let { it > 0 } ?: false
     val isHeightValid = height.trim().toDoubleOrNull()?.let { it > 0 } ?: false
@@ -484,9 +494,7 @@ fun ProductFormDialog(
                                         modifier = Modifier.weight(1f),
                                         enabled = !isSaving,
                                     ) {
-                                        Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(if (mainImageToDisplay != null) "Zmień (Aparat)" else "Aparat")
+                                        Icon(Icons.Default.PhotoCamera, contentDescription = "Zrób zdjęcie aparatem", modifier = Modifier.size(22.dp))
                                     }
                                     OutlinedButton(
                                         onClick = {
@@ -497,9 +505,7 @@ fun ProductFormDialog(
                                         modifier = Modifier.weight(1f),
                                         enabled = !isSaving,
                                     ) {
-                                        Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(if (mainImageToDisplay != null) "Zmień (Galeria)" else "Galeria")
+                                        Icon(Icons.Default.PhotoLibrary, contentDescription = "Wybierz z galerii", modifier = Modifier.size(22.dp))
                                     }
                                 }
                             }
@@ -658,9 +664,7 @@ fun ProductFormDialog(
                                         modifier = Modifier.weight(1f),
                                         enabled = !isSaving,
                                     ) {
-                                        Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("+ Aparat")
+                                        Icon(Icons.Default.PhotoCamera, contentDescription = "Dodaj z aparatu", modifier = Modifier.size(22.dp))
                                     }
                                     OutlinedButton(
                                         onClick = {
@@ -671,9 +675,7 @@ fun ProductFormDialog(
                                         modifier = Modifier.weight(1f),
                                         enabled = !isSaving,
                                     ) {
-                                        Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("+ Galeria (wiele)")
+                                        Icon(Icons.Default.PhotoLibrary, contentDescription = "Dodaj z galerii", modifier = Modifier.size(22.dp))
                                     }
                                 }
                             }
@@ -699,12 +701,18 @@ fun ProductFormDialog(
                                 OutlinedTextField(
                                     value = model,
                                     onValueChange = { model = it },
-                                    label = { Text("Model mebla *") },
+                                    label = { Text("Model *") },
                                     placeholder = { Text("np. Narożnik Palermo") },
-                                    isError = attemptedSubmit && !isModelValid,
-                                    supportingText = if (attemptedSubmit && !isModelValid) {
-                                        { Text("Model jest wymagany.") }
-                                    } else null,
+                                    isError = (attemptedSubmit && model.trim().isBlank()) || isModelDuplicate,
+                                    supportingText = when {
+                                        isModelDuplicate -> {
+                                            { Text("Model o tej nazwie już istnieje w bazie. Wpisz unikalną nazwę.") }
+                                        }
+                                        attemptedSubmit && model.trim().isBlank() -> {
+                                            { Text("Model jest wymagany.") }
+                                        }
+                                        else -> null
+                                    },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                 )
@@ -717,7 +725,7 @@ fun ProductFormDialog(
                                         value = selectedType.displayName,
                                         onValueChange = {},
                                         readOnly = true,
-                                        label = { Text("Typ mebla *") },
+                                        label = { Text("Typ *") },
                                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
                                         modifier = Modifier
                                             .menuAnchor(MenuAnchorType.PrimaryNotEditable)
@@ -749,6 +757,18 @@ fun ProductFormDialog(
                                     supportingText = if (attemptedSubmit && !isPriceValid) {
                                         { Text("Podaj prawidłową cenę większą od zera.") }
                                     } else null,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                )
+
+                                OutlinedTextField(
+                                    value = leadTimeWeeks,
+                                    onValueChange = { input ->
+                                        if (input.all { it.isDigit() }) leadTimeWeeks = input
+                                    },
+                                    label = { Text("Szacowany czas realizacji (w tyg.)") },
+                                    placeholder = { Text("np. 4") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                 )
@@ -789,7 +809,7 @@ fun ProductFormDialog(
                                     OutlinedTextField(
                                         value = depth,
                                         onValueChange = { depth = it },
-                                        label = { Text("Głębokość *") },
+                                        label = { Text("Gł./Szer. *") },
                                         placeholder = { Text("cm") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         isError = attemptedSubmit && !isDepthValid,
@@ -817,7 +837,7 @@ fun ProductFormDialog(
                             }
                         }
 
-                        // Cechy mebla
+                        // Cechy
                         Card(
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -829,7 +849,7 @@ fun ProductFormDialog(
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 Text(
-                                    text = "Cechy mebla",
+                                    text = "Cechy",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                 )
@@ -923,6 +943,7 @@ fun ProductFormDialog(
                                         remarks = remarks.trim(),
                                         imageUrl = if (selectedMainImageBytes == null) existingMainImageUrl else null,
                                         additionalImages = remoteAdditionalUrls,
+                                        leadTimeWeeks = leadTimeWeeks.trim().toIntOrNull(),
                                     )
 
                                     val mimeType = "image/jpeg"
@@ -1005,6 +1026,7 @@ fun ProductFormDialog(
 
 @Composable
 fun AddProductDialog(
+    existingProducts: List<Product> = emptyList(),
     onDismiss: () -> Unit,
     onSave: (
         request: CreateProductRequest,
@@ -1018,6 +1040,7 @@ fun AddProductDialog(
 ) {
     ProductFormDialog(
         initialProduct = null,
+        existingProducts = existingProducts,
         onDismiss = onDismiss,
         onSave = onSave,
     )

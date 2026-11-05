@@ -20,6 +20,7 @@ public record ProductResponse(
         String remarks,
         String equipment,
         String imageUrl,
-        List<String> additionalImages
+        List<String> additionalImages,
+        Integer leadTimeWeeks
 ) {
 }

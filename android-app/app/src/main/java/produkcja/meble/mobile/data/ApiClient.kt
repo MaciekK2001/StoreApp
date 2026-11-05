@@ -149,6 +149,11 @@ class ApiClient(private val baseUrl: String) {
             } else {
                 put("imageUrl", JSONObject.NULL)
             }
+            if (request.leadTimeWeeks != null) {
+                put("leadTimeWeeks", request.leadTimeWeeks)
+            } else {
+                put("leadTimeWeeks", JSONObject.NULL)
+            }
             val additionalArray = JSONArray()
             request.additionalImages.forEach { additionalArray.put(it) }
             put("additionalImages", additionalArray)
@@ -220,20 +225,26 @@ class ApiClient(private val baseUrl: String) {
             setRequestProperty("Authorization", session.authorizationHeader)
         }
 
-        connection.outputStream.use { output ->
-            output.write(("$twoHyphens$boundary$lineEnd").toByteArray(StandardCharsets.UTF_8))
-            output.write(("Content-Disposition: form-data; name=\"file\"; filename=\"$fileName\"$lineEnd").toByteArray(StandardCharsets.UTF_8))
-            output.write(("Content-Type: $mimeType$lineEnd$lineEnd").toByteArray(StandardCharsets.UTF_8))
-            output.write(imageBytes)
-            output.write(lineEnd.toByteArray(StandardCharsets.UTF_8))
-            output.write(("$twoHyphens$boundary$twoHyphens$lineEnd").toByteArray(StandardCharsets.UTF_8))
-            output.flush()
+        connection.outputStream.use { outputStream ->
+            outputStream.write((twoHyphens + boundary + lineEnd).toByteArray(StandardCharsets.UTF_8))
+            outputStream.write(
+                ("Content-Disposition: form-data; name=\"file\"; filename=\"$fileName\"$lineEnd")
+                    .toByteArray(StandardCharsets.UTF_8)
+            )
+            outputStream.write(("Content-Type: $mimeType$lineEnd").toByteArray(StandardCharsets.UTF_8))
+            outputStream.write(lineEnd.toByteArray(StandardCharsets.UTF_8))
+
+            outputStream.write(imageBytes)
+            outputStream.write(lineEnd.toByteArray(StandardCharsets.UTF_8))
+
+            outputStream.write((twoHyphens + boundary + twoHyphens + lineEnd).toByteArray(StandardCharsets.UTF_8))
+            outputStream.flush()
         }
 
         val statusCode = connection.responseCode
         if (statusCode !in 200..299) {
             val errorResponse = readStream(connection.errorStream)
-            throw ApiException(statusCode, "Błąd wysyłania zdjęcia ($statusCode): $errorResponse")
+            throw ApiException(statusCode, "Nie udało się przesłać zdjęcia ($statusCode): $errorResponse")
         }
 
         val responseBody = readStream(connection.inputStream)
@@ -332,6 +343,10 @@ class ApiClient(private val baseUrl: String) {
             emptyList()
         }
 
+        val leadTime = if (json.has("leadTimeWeeks") && !json.isNull("leadTimeWeeks")) {
+            json.optInt("leadTimeWeeks")
+        } else null
+
         return Product(
             id = json.getLong("id"),
             price = json.optDouble("price", 0.0),
@@ -347,6 +362,7 @@ class ApiClient(private val baseUrl: String) {
             equipment = json.optString("equipment", ""),
             imageUrl = json.optString("imageUrl", "").takeIf { it.isNotBlank() },
             additionalImages = additionalImages,
+            leadTimeWeeks = leadTime,
         )
     }
 
