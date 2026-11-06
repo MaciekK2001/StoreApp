@@ -1,5 +1,18 @@
 package produkcja.meble.mobile.ui.orders
 
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Chair
+import androidx.compose.material.icons.filled.ImageNotSupported
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import produkcja.meble.mobile.ui.common.FullScreenImageDialog
+import produkcja.meble.mobile.ui.common.resolveImageUrl
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -10,6 +23,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -78,6 +92,7 @@ fun OrderDetails(
     val backgroundColor = orderListBackgroundColor(isDark)
 
     var showStatusDialog by rememberSaveable { mutableStateOf(false) }
+    var fullScreenImage by remember { mutableStateOf<FullScreenImageData?>(null) }
 
     val itemsTotal = order.items.sumOf { it.price * it.quantity }
     val servicesTotal = order.assemblyPrice + order.transportPrice + order.carryProductsPrice
@@ -153,24 +168,21 @@ fun OrderDetails(
     ) {
         // Status Card
         item {
-            val (statusTitle, statusDesc, statusIcon, statusColor, statusBg) = when (order.orderStatus) {
+            val (statusTitle, statusIcon, statusColor, statusBg) = when (order.orderStatus) {
                 OrderStatus.ACTIVE -> StatusPresentation(
                     title = "Aktywne",
-                    description = "To zamówienie jest obecnie aktywne i w trakcie realizacji.",
                     icon = Icons.Default.CheckCircle,
                     color = orderStyle.primary,
                     container = orderStyle.container.copy(alpha = 0.65f),
                 )
                 OrderStatus.COMPLETED -> StatusPresentation(
                     title = "Zrealizowane",
-                    description = "To zamówienie zostało pomyślnie zrealizowane i zakończone.",
                     icon = Icons.Default.CheckCircle,
                     color = MaterialTheme.colorScheme.primary,
                     container = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
                 )
                 OrderStatus.CANCELLED -> StatusPresentation(
                     title = "Anulowane",
-                    description = "To zamówienie zostało anulowane.",
                     icon = Icons.Default.Cancel,
                     color = MaterialTheme.colorScheme.error,
                     container = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.65f),
@@ -213,12 +225,6 @@ fun OrderDetails(
                                 color = statusColor,
                             )
                         }
-                        Text(
-                            text = statusDesc,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
                     }
 
                     if (onUpdateOrderStatus != null || onToggleStatus != null) {
@@ -265,7 +271,13 @@ fun OrderDetails(
         }
 
         items(order.items, key = { it.id }) { item ->
-            OrderItemCard(item = item, orderStyle = orderStyle)
+            OrderItemCard(
+                item = item,
+                orderStyle = orderStyle,
+                onImageClick = { images, index, title ->
+                    fullScreenImage = FullScreenImageData(images, index, title)
+                },
+            )
         }
 
         // Additional Services & Options (Collapsible)
@@ -503,18 +515,41 @@ fun OrderDetails(
             }
         }
     }
+
+    fullScreenImage?.let { data ->
+        FullScreenImageDialog(
+            images = data.images,
+            initialIndex = data.initialIndex,
+            title = data.title,
+            onDismiss = { fullScreenImage = null },
+        )
+    }
 }
+
+private data class FullScreenImageData(
+    val images: List<String>,
+    val initialIndex: Int,
+    val title: String,
+)
 
 private data class StatusPresentation(
     val title: String,
-    val description: String,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val color: Color,
     val container: Color,
 )
 
 @Composable
-private fun OrderItemCard(item: OrderItem, orderStyle: SectionStyle) {
+private fun OrderItemCard(
+    item: OrderItem,
+    orderStyle: SectionStyle,
+    onImageClick: ((images: List<String>, initialIndex: Int, title: String) -> Unit)? = null,
+) {
+    val allImages = item.product?.allImages.orEmpty()
+    val displayModel = item.product?.model?.takeIf { it.isMeaningful() } ?: "Produkt #${item.id}"
+    var selectedImageIndex by rememberSaveable(item.id, allImages) { mutableIntStateOf(0) }
+    val safeIndex = if (allImages.isNotEmpty()) selectedImageIndex.coerceIn(0, allImages.lastIndex) else 0
+
     Card(
         colors = CardDefaults.cardColors(
             containerColor = orderStyle.cardBackground,
@@ -522,53 +557,198 @@ private fun OrderItemCard(item: OrderItem, orderStyle: SectionStyle) {
         border = BorderStroke(1.dp, orderStyle.cardBorder),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top,
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    val modelName = item.product?.model?.takeIf { it.isMeaningful() }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                // Zdjecie produktu lub ikona zastepcza
+                if (allImages.isNotEmpty()) {
+                    val context = LocalContext.current
+                    val currentRawUrl = allImages[safeIndex]
+                    val resolvedUrl = remember(currentRawUrl) {
+                        resolveImageUrl(currentRawUrl) ?: currentRawUrl
+                    }
+                    val imageRequest = remember(resolvedUrl) {
+                        ImageRequest.Builder(context)
+                            .data(resolvedUrl)
+                            .crossfade(true)
+                            .build()
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(84.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                            .border(1.dp, orderStyle.cardBorder.copy(alpha = 0.7f), RoundedCornerShape(10.dp))
+                            .clickable(enabled = onImageClick != null) {
+                                onImageClick?.invoke(allImages, safeIndex, displayModel)
+                            },
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            text = modelName ?: "Produkt #${item.id}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        if (item.isCustomized) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                            ) {
-                                Text(
-                                    text = "Dostosowany",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        SubcomposeAsyncImage(
+                            model = imageRequest,
+                            contentDescription = "Zdjęcie: $displayModel",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                            loading = {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                }
+                            },
+                            error = {
+                                Icon(
+                                    imageVector = Icons.Default.ImageNotSupported,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(28.dp),
                                 )
+                            },
+                        )
+
+                        if (allImages.size > 1) {
+                            Surface(
+                                shape = RoundedCornerShape(topStart = 6.dp),
+                                color = Color.Black.copy(alpha = 0.65f),
+                                modifier = Modifier.align(Alignment.BottomEnd),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.PhotoLibrary,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(10.dp),
+                                    )
+                                    Text(
+                                        text = "${allImages.size}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
                             }
                         }
                     }
-                    Text(
-                        text = if (item.quantity > 1) {
-                            "Ilość: ${item.quantity} × ${money(item.price)}"
-                        } else {
-                            "Ilość: 1 szt. • ${money(item.price)}"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(84.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(orderStyle.container.copy(alpha = 0.25f))
+                            .border(1.dp, orderStyle.cardBorder.copy(alpha = 0.5f), RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Chair,
+                            contentDescription = null,
+                            tint = orderStyle.primary.copy(alpha = 0.5f),
+                            modifier = Modifier.size(36.dp),
+                        )
+                    }
                 }
-                Text(
-                    text = money(item.price * item.quantity),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = orderStyle.primary,
-                )
+
+                // Kolumna szczegolow produktu
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    text = displayModel,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                if (item.isCustomized) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                    ) {
+                                        Text(
+                                            text = "Dostosowany",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        )
+                                    }
+                                }
+                            }
+                            Text(
+                                text = if (item.quantity > 1) {
+                                    "Ilość: ${item.quantity} × ${money(item.price)}"
+                                } else {
+                                    "Ilość: 1 szt. • ${money(item.price)}"
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+
+                        Text(
+                            text = money(item.price * item.quantity),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = orderStyle.primary,
+                        )
+                    }
+                }
+            }
+
+            // Pasek miniaturek dla wielu zdjec
+            if (allImages.size > 1) {
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    allImages.forEachIndexed { idx, rawUrl ->
+                        val isCurrent = idx == safeIndex
+                        val context = LocalContext.current
+                        val resolvedUrl = remember(rawUrl) { resolveImageUrl(rawUrl) ?: rawUrl }
+                        val thumbRequest = remember(resolvedUrl) {
+                            ImageRequest.Builder(context).data(resolvedUrl).crossfade(true).build()
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .border(
+                                    width = if (isCurrent) 2.dp else 1.dp,
+                                    color = if (isCurrent) orderStyle.primary else orderStyle.cardBorder.copy(alpha = 0.6f),
+                                    shape = RoundedCornerShape(6.dp),
+                                )
+                                .clickable {
+                                    selectedImageIndex = idx
+                                    onImageClick?.invoke(allImages, idx, displayModel)
+                                },
+                        ) {
+                            AsyncImage(
+                                model = thumbRequest,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+                }
             }
 
             if (item.isCustomized) {

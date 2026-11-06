@@ -1,5 +1,12 @@
 package produkcja.meble.mobile.ui.orders
 
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Chair
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import produkcja.meble.mobile.ui.common.resolveImageUrl
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -11,6 +18,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -348,6 +356,73 @@ fun OrderList(
                                     color = orderStyle.primary,
                                     fontWeight = FontWeight.Medium,
                                 )
+                            }
+
+                            if (order.items.isNotEmpty()) {
+                                Spacer(Modifier.height(10.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    val displayItems = order.items.take(4)
+                                    displayItems.forEach { item ->
+                                        val firstImage = item.product?.allImages?.firstOrNull()
+                                        if (firstImage != null) {
+                                            val context = LocalContext.current
+                                            val resolvedUrl = remember(firstImage) { resolveImageUrl(firstImage) ?: firstImage }
+                                            val imageRequest = remember(resolvedUrl) {
+                                                ImageRequest.Builder(context).data(resolvedUrl).crossfade(true).build()
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(46.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                                                    .border(1.dp, orderStyle.cardBorder.copy(alpha = 0.6f), RoundedCornerShape(8.dp)),
+                                            ) {
+                                                AsyncImage(
+                                                    model = imageRequest,
+                                                    contentDescription = item.product?.model,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                )
+                                            }
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(46.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(orderStyle.container.copy(alpha = 0.25f))
+                                                    .border(1.dp, orderStyle.cardBorder.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Chair,
+                                                    contentDescription = null,
+                                                    tint = orderStyle.primary.copy(alpha = 0.5f),
+                                                    modifier = Modifier.size(24.dp),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (order.items.size > 4) {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = orderStyle.container.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(46.dp),
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Text(
+                                                    text = "+${order.items.size - 4}",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = orderStyle.primary,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
 
                             if (onUpdateOrderStatus != null || onToggleStatus != null || onEditOrder != null || onDeleteOrder != null) {

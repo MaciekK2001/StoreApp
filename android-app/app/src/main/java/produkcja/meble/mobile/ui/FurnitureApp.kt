@@ -44,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -70,6 +71,14 @@ fun FurnitureApp(viewModel: FurnitureViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+
+    var previousSession by remember { mutableStateOf(state.session) }
+    LaunchedEffect(state.session) {
+        if (previousSession == null && state.session != null) {
+            snackbar.showSnackbar("Zalogowano pomyślnie")
+        }
+        previousSession = state.session
+    }
 
     LaunchedEffect(state.error) {
         state.error?.let {
@@ -207,7 +216,28 @@ private fun Dashboard(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
+                    if (state.loading) {
+                        Column {
+                            Text(
+                                text = when {
+                                    selectedOrder != null -> "Szczegóły zamówienia #${selectedOrder.id}"
+                                    state.section == MainSection.PRODUCTS -> "Katalog mebli"
+                                    else -> "Zamówienia"
+                                },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = topBarTitleColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = "Synchronizacja danych...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = topBarActionColor.copy(alpha = 0.8f),
+                                maxLines = 1,
+                            )
+                        }
+                    } else {
                         Text(
                             text = when {
                                 selectedOrder != null -> "Szczegóły zamówienia #${selectedOrder.id}"
@@ -217,11 +247,8 @@ private fun Dashboard(
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = topBarTitleColor,
-                        )
-                        Text(
-                            text = if (state.loading) "Synchronizacja danych..." else "Zalogowano pomyślnie",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = topBarActionColor.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 },
