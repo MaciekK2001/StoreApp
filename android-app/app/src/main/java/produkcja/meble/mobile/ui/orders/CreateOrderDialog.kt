@@ -93,7 +93,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -113,6 +117,37 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+
+private object PostalCodeVisualTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val trimmed = text.text.take(5)
+        val out = when {
+            trimmed.length <= 2 -> trimmed
+            else -> trimmed.substring(0, 2) + "-" + trimmed.substring(2)
+        }
+
+        val offsetMapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                val clamped = offset.coerceIn(0, trimmed.length)
+                return when {
+                    trimmed.length <= 2 -> clamped
+                    clamped < 2 -> clamped
+                    else -> clamped + 1
+                }
+            }
+
+            override fun transformedToOriginal(offset: Int): Int {
+                return when {
+                    trimmed.length <= 2 -> offset.coerceIn(0, trimmed.length)
+                    offset <= 2 -> offset.coerceIn(0, trimmed.length)
+                    else -> (offset - 1).coerceIn(0, trimmed.length)
+                }
+            }
+        }
+
+        return TransformedText(AnnotatedString(out), offsetMapping)
+    }
+}
 
 private data class ParsedAddress(
     val postalCode: String,
@@ -226,11 +261,10 @@ fun OrderFormDialog(
         onError: (String) -> Unit,
     ) -> Unit,
 ) {
-    // Delivery & customer fields
     val initialParsedAddress = remember(initialOrder) { parseAddress(initialOrder?.address) }
     var street by rememberSaveable { mutableStateOf(initialParsedAddress.street) }
     var houseNumber by rememberSaveable { mutableStateOf(initialParsedAddress.houseNumber) }
-    var postalCode by rememberSaveable { mutableStateOf(initialParsedAddress.postalCode) }
+    var postalCode by rememberSaveable { mutableStateOf(initialParsedAddress.postalCode.filter { it.isDigit() }.take(5)) }
     var city by rememberSaveable { mutableStateOf(initialParsedAddress.city) }
     var phoneNumber by rememberSaveable { mutableStateOf(initialOrder?.phoneNumber.orEmpty()) }
     var fulfillmentTime by rememberSaveable {
@@ -368,7 +402,7 @@ fun OrderFormDialog(
         }
     }
 
-    val isPostalCodeValid = Regex("""^\d{2}-\d{3}$""").matches(postalCode.trim())
+    val isPostalCodeValid = postalCode.length == 5
     val isCityValid = city.trim().isNotBlank()
     val isStreetValid = street.trim().isNotBlank()
     val isHouseNumberValid = houseNumber.trim().isNotBlank()
@@ -818,7 +852,7 @@ fun OrderFormDialog(
                                     ) {
                                         Icon(Icons.Default.PostAdd, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(6.dp))
-                                        Text("+ Nowy mebel")
+                                        Text("+ Nowy")
                                     }
                                 }
                             }
@@ -906,12 +940,9 @@ fun OrderFormDialog(
                                 OutlinedTextField(
                                     value = postalCode,
                                     onValueChange = { input ->
-                                        val digits = input.filter { it.isDigit() }.take(5)
-                                        postalCode = when {
-                                            digits.length <= 2 -> digits
-                                            else -> "${digits.substring(0, 2)}-${digits.substring(2)}"
-                                        }
+                                        postalCode = input.filter { it.isDigit() }.take(5)
                                     },
+                                    visualTransformation = PostalCodeVisualTransformation,
                                     label = { Text("Kod pocztowy *") },
                                     placeholder = { Text("00-000") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -1242,7 +1273,8 @@ fun OrderFormDialog(
                             errorMessage = null
                             isSubmitting = true
 
-                            val combinedAddress = "${street.trim()} ${houseNumber.trim()}, ${postalCode.trim()} ${city.trim()}"
+                            val formattedPostalCode = if (postalCode.length > 2) "${postalCode.substring(0, 2)}-${postalCode.substring(2)}" else postalCode
+                            val combinedAddress = "${street.trim()} ${houseNumber.trim()}, $formattedPostalCode ${city.trim()}"
                             val request = CreateOrderRequest(
                                 deliveryDate = "${deliveryDate}T12:00:00",
                                 phoneNumber = phoneNumber.trim(),

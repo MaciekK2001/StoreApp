@@ -155,7 +155,7 @@ fun OrderDetails(
         item {
             val (statusTitle, statusDesc, statusIcon, statusColor, statusBg) = when (order.orderStatus) {
                 OrderStatus.ACTIVE -> StatusPresentation(
-                    title = "Aktywne (w realizacji)",
+                    title = "Aktywne",
                     description = "To zamówienie jest obecnie aktywne i w trakcie realizacji.",
                     icon = Icons.Default.CheckCircle,
                     color = orderStyle.primary,
