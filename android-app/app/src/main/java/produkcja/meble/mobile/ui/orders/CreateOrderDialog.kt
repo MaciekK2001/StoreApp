@@ -1944,10 +1944,6 @@ private fun ProductPickerDialog(
 ) {
     BackHandler { onDismiss() }
 
-    val coroutineScope = rememberCoroutineScope()
-    val recentlyAddedIds = remember { mutableStateMapOf<Long, Boolean>() }
-    var recentlyAddedMessage by remember { mutableStateOf<String?>(null) }
-    var clearMessageJob by remember { mutableStateOf<Job?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
 
     val filteredProducts = remember(products, searchQuery) {
@@ -2015,40 +2011,7 @@ private fun ProductPickerDialog(
                     singleLine = true,
                 )
 
-                AnimatedVisibility(
-                    visible = recentlyAddedMessage != null,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically(),
-                ) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Text(
-                                text = recentlyAddedMessage.orEmpty(),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(12.dp))
 
                 if (filteredProducts.isEmpty()) {
                     Box(
@@ -2116,11 +2079,11 @@ private fun ProductPickerDialog(
                                                     shape = RoundedCornerShape(4.dp),
                                                 ) {
                                                     Text(
-                                                        text = "W zamówieniu: $currentCountInOrder",
+                                                        text = "W zamówieniu: $currentCountInOrder szt.",
                                                         style = MaterialTheme.typography.labelSmall,
                                                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                         fontWeight = FontWeight.Bold,
-                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                                     )
                                                 }
                                             }
@@ -2155,51 +2118,14 @@ private fun ProductPickerDialog(
                                         }
                                     }
 
-                                    val isJustAdded = recentlyAddedIds[product.id] == true
                                     Button(
-                                        onClick = {
-                                            onAddProduct(product)
-                                            recentlyAddedMessage = "Dodano „${product.model}” do zamówienia"
-                                            clearMessageJob?.cancel()
-                                            clearMessageJob = coroutineScope.launch {
-                                                recentlyAddedIds[product.id] = true
-                                                delay(1200)
-                                                recentlyAddedIds.remove(product.id)
-                                                delay(1800)
-                                                if (recentlyAddedMessage == "Dodano „${product.model}” do zamówienia") {
-                                                    recentlyAddedMessage = null
-                                                }
-                                            }
-                                        },
-                                        colors = if (isJustAdded) {
-                                            ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.primary,
-                                                contentColor = MaterialTheme.colorScheme.onPrimary,
-                                            )
-                                        } else {
-                                            ButtonDefaults.buttonColors()
-                                        },
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                        onClick = { onAddProduct(product) },
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                         modifier = Modifier.height(36.dp),
                                     ) {
-                                        AnimatedContent(
-                                            targetState = isJustAdded,
-                                            label = "AddButtonContent",
-                                        ) { justAdded ->
-                                            if (justAdded) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                    Spacer(Modifier.width(4.dp))
-                                                    Text("Dodano! (+1)")
-                                                }
-                                            } else {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                    Spacer(Modifier.width(4.dp))
-                                                    Text(if (currentCountInOrder > 0) "+ Kolejna" else "Dodaj")
-                                                }
-                                            }
-                                        }
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Dodaj")
                                     }
                                 }
                             }
