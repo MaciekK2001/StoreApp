@@ -13,6 +13,7 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import produkcja.meble.mobile.ui.common.FullScreenImageDialog
 import produkcja.meble.mobile.ui.common.resolveImageUrl
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -93,6 +94,13 @@ fun OrderDetails(
 
     var showStatusDialog by rememberSaveable { mutableStateOf(false) }
     var fullScreenImage by remember { mutableStateOf<FullScreenImageData?>(null) }
+
+    BackHandler(enabled = fullScreenImage != null) {
+        fullScreenImage = null
+    }
+    BackHandler(enabled = showStatusDialog) {
+        showStatusDialog = false
+    }
 
     val itemsTotal = order.items.sumOf { it.price * it.quantity }
     val servicesTotal = order.assemblyPrice + order.transportPrice + order.carryProductsPrice

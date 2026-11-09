@@ -1,6 +1,7 @@
 package produkcja.meble.mobile.ui.products
 
 import android.content.res.Configuration
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +48,10 @@ fun ProductList(
 ) {
     var activeFilter by remember { mutableStateOf(ProductFilterData()) }
     var fullScreenImage by remember { mutableStateOf<FullScreenImageData?>(null) }
+
+    BackHandler(enabled = fullScreenImage != null) {
+        fullScreenImage = null
+    }
     val backgroundColor = productListBackgroundColor()
 
     val filteredProducts = remember(products, activeFilter) {

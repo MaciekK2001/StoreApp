@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ButtonDefaults
@@ -334,24 +335,61 @@ fun ProductCard(
                 }
             }
 
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = MaterialTheme.shapes.extraSmall,
+            Row(
                 modifier = Modifier.padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = FurnitureType.from(product.type)?.displayName ?: product.type,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                )
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = MaterialTheme.shapes.extraSmall,
+                ) {
+                    Text(
+                        text = FurnitureType.from(product.type)?.displayName ?: product.type,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = MaterialTheme.shapes.extraSmall,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                        Text(
+                            text = if (product.leadTimeWeeks != null && product.leadTimeWeeks > 0) {
+                                "Czas: ${product.leadTimeWeeks} tyg."
+                            } else {
+                                "Czas: nie określono"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(10.dp))
             DetailRow("Wymiary", "${number(product.length)} × ${number(product.depth)} × ${number(product.height)} cm")
-            product.leadTimeWeeks?.takeIf { it > 0 }?.let { weeks ->
-                DetailRow("Czas realizacji", "$weeks tyg.")
-            }
+            DetailRow(
+                "Czas realizacji",
+                if (product.leadTimeWeeks != null && product.leadTimeWeeks > 0) {
+                    "${product.leadTimeWeeks} tyg."
+                } else {
+                    "Nie określono"
+                }
+            )
             DetailRow("Kolor", product.colour)
             DetailRow("Materiał", product.material)
             if (product.fabric.isMeaningful()) {

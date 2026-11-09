@@ -1,5 +1,6 @@
 package produkcja.meble.mobile.ui.common
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -116,6 +117,8 @@ fun FullScreenImageDialog(
             dismissOnClickOutside = false,
         ),
     ) {
+        BackHandler { onDismiss() }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()

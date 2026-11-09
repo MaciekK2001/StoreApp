@@ -54,6 +54,7 @@ public class SampleDataLoader implements CommandLineRunner {
                 .fabric("Leather")
                 .remarks("Sample bed")
                 .equipment("Storage box")
+                .leadTimeWeeks(3)
                 .build());
 
         ProductResponse sofa = productService.saveProduct(ProductRequest.builder()
@@ -68,6 +69,7 @@ public class SampleDataLoader implements CommandLineRunner {
                 .fabric("Velour")
                 .remarks("Sample sofa")
                 .equipment("Sleeping function")
+                .leadTimeWeeks(4)
                 .build());
 
         ProductResponse wardrobe = productService.saveProduct(ProductRequest.builder()
@@ -82,6 +84,7 @@ public class SampleDataLoader implements CommandLineRunner {
                 .fabric(null)
                 .remarks("Sample wardrobe")
                 .equipment("Mirror")
+                .leadTimeWeeks(2)
                 .build());
 
         orderService.saveOrder(CreateOrderRequest.builder()

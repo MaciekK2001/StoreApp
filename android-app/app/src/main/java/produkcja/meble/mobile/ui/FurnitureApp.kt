@@ -1,5 +1,6 @@
 package produkcja.meble.mobile.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -211,6 +212,32 @@ private fun Dashboard(
     var showCreateOrderDialog by rememberSaveable { mutableStateOf(false) }
     var orderToEdit by remember { mutableStateOf<FurnitureOrder?>(null) }
     var orderToDelete by remember { mutableStateOf<FurnitureOrder?>(null) }
+
+    // Hierarchical back navigation handling
+    BackHandler(enabled = orderToDelete != null) {
+        orderToDelete = null
+    }
+    BackHandler(enabled = productToDelete != null) {
+        productToDelete = null
+    }
+    BackHandler(enabled = orderToEdit != null) {
+        orderToEdit = null
+    }
+    BackHandler(enabled = showCreateOrderDialog) {
+        showCreateOrderDialog = false
+    }
+    BackHandler(enabled = productToEdit != null) {
+        productToEdit = null
+    }
+    BackHandler(enabled = showCreateProductDialog) {
+        showCreateProductDialog = false
+    }
+    BackHandler(enabled = selectedOrder != null) {
+        onCloseOrder()
+    }
+    BackHandler(enabled = selectedOrder == null && state.section == MainSection.PRODUCTS) {
+        onSectionSelected(MainSection.ORDERS)
+    }
 
     Scaffold(
         topBar = {

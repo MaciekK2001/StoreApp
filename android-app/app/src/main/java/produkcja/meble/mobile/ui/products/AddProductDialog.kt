@@ -10,6 +10,7 @@ import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -165,6 +166,7 @@ fun ProductFormDialog(
 
     var attemptedSubmit by rememberSaveable { mutableStateOf(false) }
     var isSaving by rememberSaveable { mutableStateOf(false) }
+        BackHandler(enabled = !isSaving) { onDismiss() }
     var apiErrorMessage by rememberSaveable { mutableStateOf<String?>(null) }
 
     val isModelDuplicate = remember(model, existingProducts, initialProduct) {

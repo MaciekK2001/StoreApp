@@ -1,5 +1,11 @@
 package produkcja.meble.mobile.ui.orders
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.material.icons.filled.Schedule
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -336,6 +342,21 @@ fun OrderFormDialog(
     var showCreateProductDialog by rememberSaveable { mutableStateOf(false) }
     var itemToCustomize by remember { mutableStateOf<FormOrderItem?>(null) }
 
+    val coroutineScope = rememberCoroutineScope()
+    var formFeedbackMessage by remember { mutableStateOf<String?>(null) }
+    var clearFeedbackJob by remember { mutableStateOf<Job?>(null) }
+
+    val showFeedback: (String) -> Unit = { msg ->
+        formFeedbackMessage = msg
+        clearFeedbackJob?.cancel()
+        clearFeedbackJob = coroutineScope.launch {
+            delay(3000)
+            if (formFeedbackMessage == msg) {
+                formFeedbackMessage = null
+            }
+        }
+    }
+
     // Selected order items list with support for customized parameters
     val orderItems = remember(initialOrder) {
         mutableStateListOf<FormOrderItem>().apply {
@@ -364,6 +385,16 @@ fun OrderFormDialog(
     var isSubmitting by rememberSaveable { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var attemptedSubmit by rememberSaveable { mutableStateOf(false) }
+
+    BackHandler(enabled = !isSubmitting) {
+        when {
+            showDatePicker -> showDatePicker = false
+            showProductPicker -> showProductPicker = false
+            showCreateProductDialog -> showCreateProductDialog = false
+            itemToCustomize != null -> itemToCustomize = null
+            else -> onDismiss()
+        }
+    }
 
     // Live reactive computations: reading Compose states inside derivedStateOf
     val itemsSubtotal by remember {
@@ -643,6 +674,39 @@ fun OrderFormDialog(
 
                             Spacer(Modifier.height(10.dp))
 
+                            AnimatedVisibility(
+                                visible = formFeedbackMessage != null,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically(),
+                            ) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 10.dp),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                        Text(
+                                            text = formFeedbackMessage.orEmpty(),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            fontWeight = FontWeight.Medium,
+                                        )
+                                    }
+                                }
+                            }
+
                             if (orderItems.isEmpty()) {
                                 Box(
                                     modifier = Modifier
@@ -739,8 +803,11 @@ fun OrderFormDialog(
                                                             onClick = {
                                                                 if (item.quantity > 1) {
                                                                     orderItems[index] = item.copy(quantity = item.quantity - 1)
+                                                                    showFeedback("Zmniejszono ilość „${item.baseProduct.model}” do ${item.quantity - 1} szt.")
                                                                 } else {
+                                                                    val removedModel = item.baseProduct.model
                                                                     orderItems.removeAt(index)
+                                                                    showFeedback("Usunięto mebel „$removedModel” z zamówienia")
                                                                 }
                                                             },
                                                             modifier = Modifier.size(32.dp),
@@ -761,6 +828,7 @@ fun OrderFormDialog(
                                                         IconButton(
                                                             onClick = {
                                                                 orderItems[index] = item.copy(quantity = item.quantity + 1)
+                                                                showFeedback("Zwiększono ilość „${item.baseProduct.model}” do ${item.quantity + 1} szt.")
                                                             },
                                                             modifier = Modifier.size(32.dp),
                                                         ) {
@@ -1373,6 +1441,7 @@ fun OrderFormDialog(
     if (showProductPicker) {
         ProductPickerDialog(
             products = products,
+            orderItems = orderItems,
             onAddProduct = { product ->
                 val existingIndex = orderItems.indexOfFirst { it.baseProduct.id == product.id && !it.isCustomized }
                 if (existingIndex >= 0) {
@@ -1381,6 +1450,7 @@ fun OrderFormDialog(
                 } else {
                     orderItems.add(FormOrderItem(baseProduct = product, quantity = 1))
                 }
+                showFeedback("Dodano mebel „${product.model}” do zamówienia")
             },
             onDismiss = { showProductPicker = false },
         )
@@ -1403,6 +1473,7 @@ fun OrderFormDialog(
                         // Automatically add the new product to order items!
                         orderItems.add(FormOrderItem(baseProduct = createdProduct, quantity = 1))
                         showCreateProductDialog = false
+                        showFeedback("Utworzono i dodano „${createdProduct.model}” do zamówienia")
                         onSucc("Dodano mebel \"${createdProduct.model}\" do bazy i zamówienia.")
                     },
                     /* onError = */ { err ->
@@ -1867,11 +1938,16 @@ private fun CustomizeOrderItemDialog(
 @Composable
 private fun ProductPickerDialog(
     products: List<Product>,
+    orderItems: List<FormOrderItem>,
     onAddProduct: (Product) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    BackHandler { onDismiss() }
+
     val coroutineScope = rememberCoroutineScope()
     val recentlyAddedIds = remember { mutableStateMapOf<Long, Boolean>() }
+    var recentlyAddedMessage by remember { mutableStateOf<String?>(null) }
+    var clearMessageJob by remember { mutableStateOf<Job?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
 
     val filteredProducts = remember(products, searchQuery) {
@@ -1894,8 +1970,8 @@ private fun ProductPickerDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .fillMaxHeight(0.85f)
+                .fillMaxWidth(0.94f)
+                .fillMaxHeight(0.88f)
                 .clip(RoundedCornerShape(20.dp)),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 8.dp,
@@ -1910,11 +1986,19 @@ private fun ProductPickerDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = "Wybierz meble z katalogu",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Column {
+                        Text(
+                            text = "Wybierz meble z katalogu",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        val totalCount = orderItems.sumOf { it.quantity }
+                        Text(
+                            text = if (totalCount > 0) "W zamówieniu: $totalCount szt." else "Brak mebli w zamówieniu",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, contentDescription = "Zamknij")
                     }
@@ -1931,7 +2015,40 @@ private fun ProductPickerDialog(
                     singleLine = true,
                 )
 
-                Spacer(Modifier.height(12.dp))
+                AnimatedVisibility(
+                    visible = recentlyAddedMessage != null,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Text(
+                                text = recentlyAddedMessage.orEmpty(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
 
                 if (filteredProducts.isEmpty()) {
                     Box(
@@ -1951,6 +2068,8 @@ private fun ProductPickerDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(filteredProducts, key = { it.id }) { product ->
+                            val currentCountInOrder = orderItems.filter { it.baseProduct.id == product.id }.sumOf { it.quantity }
+
                             Card(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -1982,11 +2101,30 @@ private fun ProductPickerDialog(
                                     }
 
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = product.model,
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            fontWeight = FontWeight.SemiBold,
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            Text(
+                                                text = product.model,
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                            if (currentCountInOrder > 0) {
+                                                Surface(
+                                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                                    shape = RoundedCornerShape(4.dp),
+                                                ) {
+                                                    Text(
+                                                        text = "W zamówieniu: $currentCountInOrder",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                    )
+                                                }
+                                            }
+                                        }
                                         Text(
                                             text = "${FurnitureType.displayLabel(product.type)} • ${money(product.price)}",
                                             style = MaterialTheme.typography.bodySmall,
@@ -1997,37 +2135,70 @@ private fun ProductPickerDialog(
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.outline,
                                         )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier.padding(top = 2.dp),
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Schedule,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(12.dp),
+                                                tint = MaterialTheme.colorScheme.primary,
+                                            )
+                                            Text(
+                                                text = "Czas: ${product.leadTimeWeeks?.takeIf { it > 0 }?.let { "$it tyg." } ?: "nie określono"}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Medium,
+                                            )
+                                        }
                                     }
 
                                     val isJustAdded = recentlyAddedIds[product.id] == true
                                     Button(
                                         onClick = {
                                             onAddProduct(product)
-                                            coroutineScope.launch {
+                                            recentlyAddedMessage = "Dodano „${product.model}” do zamówienia"
+                                            clearMessageJob?.cancel()
+                                            clearMessageJob = coroutineScope.launch {
                                                 recentlyAddedIds[product.id] = true
-                                                delay(900)
+                                                delay(1200)
                                                 recentlyAddedIds.remove(product.id)
+                                                delay(1800)
+                                                if (recentlyAddedMessage == "Dodano „${product.model}” do zamówienia") {
+                                                    recentlyAddedMessage = null
+                                                }
                                             }
                                         },
                                         colors = if (isJustAdded) {
                                             ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                containerColor = MaterialTheme.colorScheme.primary,
+                                                contentColor = MaterialTheme.colorScheme.onPrimary,
                                             )
                                         } else {
                                             ButtonDefaults.buttonColors()
                                         },
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                                         modifier = Modifier.height(36.dp),
                                     ) {
-                                        if (isJustAdded) {
-                                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("Dodano!")
-                                        } else {
-                                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("Dodaj")
+                                        AnimatedContent(
+                                            targetState = isJustAdded,
+                                            label = "AddButtonContent",
+                                        ) { justAdded ->
+                                            if (justAdded) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                    Spacer(Modifier.width(4.dp))
+                                                    Text("Dodano! (+1)")
+                                                }
+                                            } else {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                    Spacer(Modifier.width(4.dp))
+                                                    Text(if (currentCountInOrder > 0) "+ Kolejna" else "Dodaj")
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -2042,8 +2213,12 @@ private fun ProductPickerDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                 ) {
-                    Button(onClick = onDismiss) {
-                        Text("Gotowe")
+                    val totalOrderCount = orderItems.sumOf { it.quantity }
+                    Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            if (totalOrderCount > 0) "Gotowe (w zamówieniu: $totalOrderCount szt.)"
+                            else "Gotowe"
+                        )
                     }
                 }
             }
