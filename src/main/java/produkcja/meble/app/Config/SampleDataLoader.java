@@ -88,9 +88,9 @@ public class SampleDataLoader implements CommandLineRunner {
                 .build());
 
         orderService.saveOrder(CreateOrderRequest.builder()
-                .deliveryDate(LocalDateTime.now().plusDays(14))
+                .deliveryDate(LocalDateTime.now().plusWeeks(4))
                 .phoneNumber("123456789")
-                .fulfillmentTime(14)
+                .fulfillmentTime(4)
                 .contactRemarks("Call after 16")
                 .address("Warszawa, ul. Przykladowa 10")
                 .assemblyPrice(BigDecimal.valueOf(200))
@@ -116,9 +116,9 @@ public class SampleDataLoader implements CommandLineRunner {
                 .build(), admin);
 
         orderService.saveOrder(CreateOrderRequest.builder()
-                .deliveryDate(LocalDateTime.now().plusDays(21))
+                .deliveryDate(LocalDateTime.now().plusWeeks(2))
                 .phoneNumber("987654321")
-                .fulfillmentTime(21)
+                .fulfillmentTime(2)
                 .contactRemarks("Email preferred")
                 .address("Krakow, ul. Testowa 5")
                 .assemblyPrice(BigDecimal.valueOf(300))

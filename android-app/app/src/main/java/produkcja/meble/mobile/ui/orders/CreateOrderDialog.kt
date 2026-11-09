@@ -82,6 +82,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -274,7 +275,7 @@ fun OrderFormDialog(
     var city by rememberSaveable { mutableStateOf(initialParsedAddress.city) }
     var phoneNumber by rememberSaveable { mutableStateOf(initialOrder?.phoneNumber.orEmpty()) }
     var fulfillmentTime by rememberSaveable {
-        mutableStateOf(initialOrder?.fulfillmentTime?.toString() ?: "14")
+        mutableStateOf(initialOrder?.fulfillmentTime?.takeIf { it > 0 }?.toString().orEmpty())
     }
     var contactRemarks by rememberSaveable { mutableStateOf(initialOrder?.contactRemarks.orEmpty()) }
 
@@ -290,7 +291,7 @@ fun OrderFormDialog(
             } catch (_: Exception) {
                 null
             }
-        } ?: LocalDate.now().plusDays(14)
+        } ?: LocalDate.now().plusWeeks(2)
     }
     var deliveryDate by rememberSaveable {
         mutableStateOf(parsedInitialDate)
@@ -397,6 +398,27 @@ fun OrderFormDialog(
     }
 
     // Live reactive computations: reading Compose states inside derivedStateOf
+    val maxLeadTimeWeeks by remember {
+        derivedStateOf {
+            orderItems.mapNotNull { it.baseProduct.leadTimeWeeks?.takeIf { w -> w > 0 } }.maxOrNull()
+        }
+    }
+
+    var userEditedFulfillmentTime by rememberSaveable { mutableStateOf(initialOrder != null) }
+    var userEditedDeliveryDate by rememberSaveable { mutableStateOf(initialOrder != null) }
+
+    LaunchedEffect(maxLeadTimeWeeks) {
+        val maxWeeks = maxLeadTimeWeeks
+        if (maxWeeks != null) {
+            if (!userEditedFulfillmentTime) {
+                fulfillmentTime = maxWeeks.toString()
+            }
+            if (!userEditedDeliveryDate) {
+                deliveryDate = LocalDate.now().plusWeeks(maxWeeks.toLong())
+            }
+        }
+    }
+
     val itemsSubtotal by remember {
         derivedStateOf {
             orderItems.sumOf { it.effectivePrice * it.quantity }
@@ -1051,8 +1073,24 @@ fun OrderFormDialog(
                             // Czas realizacji
                             OutlinedTextField(
                                 value = fulfillmentTime,
-                                onValueChange = { fulfillmentTime = it },
-                                label = { Text("Czas realizacji (dni)") },
+                                onValueChange = { input ->
+                                    if (input.all { it.isDigit() }) {
+                                        fulfillmentTime = input
+                                        userEditedFulfillmentTime = true
+                                        val weeks = input.toIntOrNull()
+                                        if (!userEditedDeliveryDate && weeks != null && weeks > 0) {
+                                            deliveryDate = LocalDate.now().plusWeeks(weeks.toLong())
+                                        }
+                                    }
+                                },
+                                label = { Text("Czas realizacji (tyg.)") },
+                                supportingText = {
+                                    if (maxLeadTimeWeeks != null) {
+                                        Text("Najdłuższy czas mebli w zamówieniu: $maxLeadTimeWeeks tyg.")
+                                    } else {
+                                        Text("Szacowany czas realizacji w tygodniach")
+                                    }
+                                },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.fillMaxWidth(),
                             )
@@ -1346,7 +1384,7 @@ fun OrderFormDialog(
                             val request = CreateOrderRequest(
                                 deliveryDate = "${deliveryDate}T12:00:00",
                                 phoneNumber = phoneNumber.trim(),
-                                fulfillmentTime = fulfillmentTime.toIntOrNull() ?: 14,
+                                fulfillmentTime = fulfillmentTime.toIntOrNull() ?: maxLeadTimeWeeks ?: 2,
                                 contactRemarks = contactRemarks.trim().takeIf { it.isNotBlank() },
                                 address = combinedAddress,
                                 assemblyPrice = parsedAssemblyPrice,
@@ -1420,6 +1458,7 @@ fun OrderFormDialog(
                     onClick = {
                         datePickerState.selectedDateMillis?.let { millis ->
                             deliveryDate = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
+                            userEditedDeliveryDate = true
                         }
                         showDatePicker = false
                     },

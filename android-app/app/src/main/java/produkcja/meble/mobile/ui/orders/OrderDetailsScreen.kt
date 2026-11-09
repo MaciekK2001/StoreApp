@@ -258,9 +258,16 @@ fun OrderDetails(
                     DetailRow(label = "Adres dostawy", value = order.address)
                     DetailRow(label = "Numer telefonu", value = order.phoneNumber)
                     DetailRow(label = "Termin dostawy", value = dateTime(order.deliveryDate))
+                    val weeks = order.fulfillmentTime
+                    val weeksText = when {
+                        weeks <= 0 -> "Nie określono"
+                        weeks == 1 -> "1 tydzień"
+                        weeks % 10 in 2..4 && (weeks % 100 !in 12..14) -> "$weeks tygodnie"
+                        else -> "$weeks tygodni"
+                    }
                     DetailRow(
                         label = "Czas realizacji",
-                        value = "${order.fulfillmentTime} ${if (order.fulfillmentTime == 1) "dzień" else "dni"}",
+                        value = weeksText,
                     )
                     OptionalDetailRow(label = "Uwagi do kontaktu", value = order.contactRemarks)
                 }
