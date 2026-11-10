@@ -359,6 +359,44 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun seedDefaultFurnitureTypes(
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit,
+    ) {
+        val session = _uiState.value.session ?: run {
+            onError("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.")
+            return
+        }
+        val defaultList = listOf(
+            "Krzesło", "Fotel", "Sofa", "Narożnik", "Stół", "Stolik kawowy",
+            "Biurko", "Łóżko", "Szafa", "Regał", "Komoda", "Szafka nocna", "Półka"
+        )
+        viewModelScope.launch {
+            try {
+                val updatedTypes = withContext(Dispatchers.IO) {
+                    for (typeName in defaultList) {
+                        try {
+                            api.createFurnitureType(typeName, session)
+                        } catch (_: Exception) {
+                        }
+                    }
+                    api.getFurnitureTypes(session)
+                }
+                _uiState.update { current ->
+                    current.copy(furnitureTypes = updatedTypes.sortedBy { it.name })
+                }
+                onSuccess()
+            } catch (exception: Exception) {
+                Log.e("FurnitureViewModel", "Błąd inicjalizacji domyślnych typów", exception)
+                val userMsg = exception.toUserMessage()
+                if (exception is ApiException && exception.statusCode == 401) {
+                    handleAuthorizedError(exception)
+                }
+                onError(userMsg)
+            }
+        }
+    }
+
     fun deleteProduct(
         id: Long,
         onSuccess: (String) -> Unit,

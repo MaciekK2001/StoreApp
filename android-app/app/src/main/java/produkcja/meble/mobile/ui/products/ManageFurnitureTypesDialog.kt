@@ -36,6 +36,7 @@ fun ManageFurnitureTypesDialog(
     onCreateType: (name: String, onSuccess: (FurnitureTypeItem) -> Unit, onError: (String) -> Unit) -> Unit,
     onDeleteType: (id: Long, onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit,
     onTypeSelected: ((FurnitureTypeItem) -> Unit)? = null,
+    onSeedDefaults: ((onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit)? = null,
 ) {
     BackHandler { onDismiss() }
 
@@ -265,17 +266,41 @@ fun ManageFurnitureTypesDialog(
 
                 // List of types
                 if (types.isEmpty()) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        contentAlignment = Alignment.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
                     ) {
                         Text(
-                            text = "Brak zdefiniowanych typów mebli.",
+                            text = "Brak zdefiniowanych typów w bazie danych.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (onSeedDefaults != null) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = {
+                                    isProcessing = true
+                                    errorMessage = null
+                                    successMessage = null
+                                    onSeedDefaults(
+                                        {
+                                            isProcessing = false
+                                            successMessage = "Załadowano standardowe kategorie mebli."
+                                        },
+                                        { err ->
+                                            isProcessing = false
+                                            errorMessage = err
+                                        },
+                                    )
+                                },
+                                enabled = !isProcessing,
+                            ) {
+                                Text("Dodaj standardowe kategorie")
+                            }
+                        }
                     }
                 } else {
                     LazyColumn(

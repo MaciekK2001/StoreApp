@@ -146,6 +146,7 @@ fun FurnitureApp(viewModel: FurnitureViewModel) {
                     },
                     onCreateFurnitureType = viewModel::createFurnitureType,
                     onDeleteFurnitureType = viewModel::deleteFurnitureType,
+                    onSeedDefaultFurnitureTypes = viewModel::seedDefaultFurnitureTypes,
                     onSelectOrderStatusFilter = viewModel::setSelectedOrderStatusFilter,
                     onToggleShowActiveOrders = viewModel::setShowOnlyActiveOrders,
                 )
@@ -175,6 +176,7 @@ private fun Dashboard(
     onUpdateOrderStatus: (FurnitureOrder, OrderStatus) -> Unit,
     onCreateFurnitureType: (String, (FurnitureTypeItem) -> Unit, (String) -> Unit) -> Unit,
     onDeleteFurnitureType: (Long, () -> Unit, (String) -> Unit) -> Unit,
+    onSeedDefaultFurnitureTypes: (onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit,
     onSelectOrderStatusFilter: (OrderStatus?) -> Unit,
     onToggleShowActiveOrders: (Boolean) -> Unit,
 ) {
@@ -677,6 +679,7 @@ private fun Dashboard(
             onDismiss = { showManageFurnitureTypesDialog = false },
             onCreateType = onCreateFurnitureType,
             onDeleteType = onDeleteFurnitureType,
+            onSeedDefaults = onSeedDefaultFurnitureTypes,
         )
     }
 }

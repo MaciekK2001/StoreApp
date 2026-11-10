@@ -42,28 +42,7 @@ public class SampleDataLoader implements CommandLineRunner {
     public void run(String @NonNull ... args) {
         UserAccount admin = loadUsers();
 
-        List<String> defaultTypes = List.of(
-                "Krzesło", "Fotel", "Sofa", "Narożnik", "Stół", "Stolik kawowy",
-                "Biurko", "Łóżko", "Szafa", "Regał", "Komoda", "Szafka nocna", "Półka"
-        );
-        for (String typeName : defaultTypes) {
-            if (!furnitureTypeRepository.existsByNameIgnoreCase(typeName)) {
-                furnitureTypeRepository.save(FurnitureType.builder().name(typeName).build());
-            }
-        }
 
-        for (Product p : productRepository.findAll()) {
-            if ("BED".equalsIgnoreCase(p.getType())) {
-                p.setType("Łóżko");
-                productRepository.save(p);
-            } else if ("SOFA".equalsIgnoreCase(p.getType())) {
-                p.setType("Sofa");
-                productRepository.save(p);
-            } else if ("WARDROBE".equalsIgnoreCase(p.getType())) {
-                p.setType("Szafa");
-                productRepository.save(p);
-            }
-        }
 
         if (productRepository.count() > 0 || orderRepository.count() > 0) {
             return;
