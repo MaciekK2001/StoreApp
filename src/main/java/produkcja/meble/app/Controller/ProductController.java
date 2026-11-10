@@ -17,11 +17,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import produkcja.meble.app.dto.FurnitureTypeResponse;
 import produkcja.meble.app.dto.ProductRequest;
 import produkcja.meble.app.dto.ProductResponse;
-import produkcja.meble.app.entity.FurnitureType;
 import produkcja.meble.app.exception.BadRequestException;
 import produkcja.meble.app.service.FileStorageService;
+import produkcja.meble.app.service.FurnitureTypeService;
 import produkcja.meble.app.service.ProductService;
 
 import java.net.URI;
@@ -34,16 +35,17 @@ import java.util.Map;
 public class ProductController {
 
     private final ProductService productService;
+    private final FurnitureTypeService furnitureTypeService;
     private final FileStorageService fileStorageService;
 
     @GetMapping
-    public ResponseEntity<List<ProductResponse>> getAllProducts(@RequestParam(required = false) List<FurnitureType> types) {
+    public ResponseEntity<List<ProductResponse>> getAllProducts(@RequestParam(required = false) List<String> types) {
         return ResponseEntity.ok(productService.findAllProducts(types));
     }
 
     @GetMapping("/types")
-    public ResponseEntity<FurnitureType[]> getFurnitureTypes() {
-        return ResponseEntity.ok(FurnitureType.values());
+    public ResponseEntity<List<String>> getFurnitureTypes() {
+        return ResponseEntity.ok(furnitureTypeService.findAll().stream().map(FurnitureTypeResponse::name).toList());
     }
 
     @GetMapping("/{id}")

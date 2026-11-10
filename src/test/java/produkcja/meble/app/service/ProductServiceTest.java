@@ -8,7 +8,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import produkcja.meble.app.dto.ProductRequest;
 import produkcja.meble.app.dto.ProductResponse;
-import produkcja.meble.app.entity.FurnitureType;
 import produkcja.meble.app.entity.Product;
 import produkcja.meble.app.exception.ConflictException;
 import produkcja.meble.app.exception.ResourceNotFoundException;
@@ -194,7 +193,7 @@ class ProductServiceTest {
                 .depth(90)
                 .colour("Brown")
                 .model(model)
-                .type(FurnitureType.BED)
+                .type("Łóżko")
                 .material("Oak")
                 .fabric("Leather")
                 .remarks("Test product")

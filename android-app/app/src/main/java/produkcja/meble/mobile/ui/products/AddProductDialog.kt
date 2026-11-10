@@ -43,7 +43,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddAPhoto
+import produkcja.meble.mobile.data.FurnitureTypeItem
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -105,6 +107,9 @@ private sealed interface ExtraImageItem {
 fun ProductFormDialog(
     initialProduct: Product? = null,
     existingProducts: List<Product> = emptyList(),
+    furnitureTypes: List<FurnitureTypeItem> = emptyList(),
+    onCreateType: ((name: String, onSuccess: (FurnitureTypeItem) -> Unit, onError: (String) -> Unit) -> Unit)? = null,
+    onDeleteType: ((id: Long, onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit)? = null,
     onDismiss: () -> Unit,
     onSave: (
         request: CreateProductRequest,
@@ -120,12 +125,19 @@ fun ProductFormDialog(
     val isEditing = initialProduct != null
 
     var model by rememberSaveable { mutableStateOf(initialProduct?.model.orEmpty()) }
-    var selectedType by rememberSaveable {
+    val typeNames = remember(furnitureTypes) {
+        if (furnitureTypes.isNotEmpty()) furnitureTypes.map { it.name }
+        else FurnitureType.entries.map { it.displayName }
+    }
+    var selectedTypeName by rememberSaveable {
         mutableStateOf(
-            initialProduct?.type?.let { FurnitureType.from(it) } ?: FurnitureType.CHAIR,
+            initialProduct?.type?.let { FurnitureType.displayLabel(it) }
+                ?: typeNames.firstOrNull()
+                ?: "Krzesło",
         )
     }
     var typeExpanded by rememberSaveable { mutableStateOf(false) }
+    var showManageTypesDialog by rememberSaveable { mutableStateOf(false) }
 
     var length by rememberSaveable {
         mutableStateOf(initialProduct?.length?.takeIf { it > 0.0 }?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }.orEmpty())
@@ -724,7 +736,7 @@ fun ProductFormDialog(
                                     onExpandedChange = { if (!isSaving) typeExpanded = !typeExpanded },
                                 ) {
                                     OutlinedTextField(
-                                        value = selectedType.displayName,
+                                        value = selectedTypeName,
                                         onValueChange = {},
                                         readOnly = true,
                                         label = { Text("Typ *") },
@@ -737,12 +749,38 @@ fun ProductFormDialog(
                                         expanded = typeExpanded,
                                         onDismissRequest = { typeExpanded = false },
                                     ) {
-                                        FurnitureType.entries.forEach { type ->
+                                        typeNames.forEach { typeName ->
                                             DropdownMenuItem(
-                                                text = { Text(type.displayName) },
+                                                text = { Text(typeName) },
                                                 onClick = {
-                                                    selectedType = type
+                                                    selectedTypeName = typeName
                                                     typeExpanded = false
+                                                },
+                                            )
+                                        }
+                                        if (onCreateType != null && onDeleteType != null) {
+                                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                    ) {
+                                                        Icon(
+                                                            Icons.Default.Add,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                        )
+                                                        Text(
+                                                            "Zarządzaj / Dodaj typ...",
+                                                            color = MaterialTheme.colorScheme.primary,
+                                                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                                        )
+                                                    }
+                                                },
+                                                onClick = {
+                                                    typeExpanded = false
+                                                    showManageTypesDialog = true
                                                 },
                                             )
                                         }
@@ -933,7 +971,7 @@ fun ProductFormDialog(
 
                                     val request = CreateProductRequest(
                                         model = model.trim(),
-                                        type = selectedType.name,
+                                        type = selectedTypeName,
                                         length = parsedLength,
                                         depth = parsedDepth,
                                         height = parsedHeight,
@@ -1029,6 +1067,9 @@ fun ProductFormDialog(
 @Composable
 fun AddProductDialog(
     existingProducts: List<Product> = emptyList(),
+    furnitureTypes: List<FurnitureTypeItem> = emptyList(),
+    onCreateType: ((name: String, onSuccess: (FurnitureTypeItem) -> Unit, onError: (String) -> Unit) -> Unit)? = null,
+    onDeleteType: ((id: Long, onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit)? = null,
     onDismiss: () -> Unit,
     onSave: (
         request: CreateProductRequest,
@@ -1043,6 +1084,9 @@ fun AddProductDialog(
     ProductFormDialog(
         initialProduct = null,
         existingProducts = existingProducts,
+        furnitureTypes = furnitureTypes,
+        onCreateType = onCreateType,
+        onDeleteType = onDeleteType,
         onDismiss = onDismiss,
         onSave = onSave,
     )

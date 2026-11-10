@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import produkcja.meble.mobile.data.FurnitureType
+import produkcja.meble.mobile.data.FurnitureTypeItem
 import produkcja.meble.mobile.data.Product
 import produkcja.meble.mobile.data.ProductFilter as ProductFilterData
 import produkcja.meble.mobile.ui.common.EmptyState
@@ -42,9 +43,11 @@ private data class FullScreenImageData(
 @Composable
 fun ProductList(
     products: List<Product>,
+    furnitureTypes: List<FurnitureTypeItem> = emptyList(),
     modifier: Modifier = Modifier,
     onEditProduct: ((Product) -> Unit)? = null,
     onDeleteProduct: ((Product) -> Unit)? = null,
+    onManageFurnitureTypes: (() -> Unit)? = null,
 ) {
     var activeFilter by remember { mutableStateOf(ProductFilterData()) }
     var fullScreenImage by remember { mutableStateOf<FullScreenImageData?>(null) }
@@ -63,6 +66,7 @@ fun ProductList(
                     val productType = FurnitureType.from(product.type)
                     (productType?.displayName?.equals(selectedType, ignoreCase = true) == true) ||
                         (productType?.name?.equals(selectedType, ignoreCase = true) == true) ||
+                        product.type.equals(selectedType, ignoreCase = true) ||
                         product.type.contains(selectedType, ignoreCase = true)
                 }
                 val matchesMinPrice = activeFilter.minPrice == null || product.price >= activeFilter.minPrice!!
@@ -110,6 +114,8 @@ fun ProductList(
             ProductFilter(
                 filter = activeFilter,
                 onFilterChange = { activeFilter = it },
+                availableTypes = furnitureTypes.map { it.name },
+                onManageTypesClick = onManageFurnitureTypes,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),

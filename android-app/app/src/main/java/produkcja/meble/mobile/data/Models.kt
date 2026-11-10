@@ -45,6 +45,11 @@ data class AuthSession(
         get() = "$tokenType $token"
 }
 
+data class FurnitureTypeItem(
+    val id: Long,
+    val name: String,
+)
+
 data class Product(
     val id: Long,
     val price: Double,

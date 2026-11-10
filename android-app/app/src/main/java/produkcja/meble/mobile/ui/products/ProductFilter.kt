@@ -58,6 +58,8 @@ import produkcja.meble.mobile.ui.common.number
 fun ProductFilter(
     filter: ProductFilterData,
     onFilterChange: (ProductFilterData) -> Unit,
+    availableTypes: List<String> = emptyList(),
+    onManageTypesClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var isExpanded by rememberSaveable { mutableStateOf(false) }
@@ -166,28 +168,46 @@ fun ProductFilter(
 
                     // Typ mebla (chipy wielokrotnego wyboru)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            text = "Kategoria mebla",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "Kategoria mebla",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (onManageTypesClick != null) {
+                                androidx.compose.material3.TextButton(
+                                    onClick = onManageTypesClick,
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                ) {
+                                    Text("Zarządzaj", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                        val displayTypes = remember(availableTypes) {
+                            if (availableTypes.isNotEmpty()) availableTypes
+                            else FurnitureType.entries.map { it.displayName }
+                        }
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            FurnitureType.entries.forEach { type ->
-                                val isSelected = filter.type.contains(type.displayName)
+                            displayTypes.forEach { typeName ->
+                                val isSelected = filter.type.contains(typeName)
                                 FilterChip(
                                     selected = isSelected,
                                     onClick = {
                                         val updatedTypes = if (isSelected) {
-                                            filter.type - type.displayName
+                                            filter.type - typeName
                                         } else {
-                                            filter.type + type.displayName
+                                            filter.type + typeName
                                         }
                                         onFilterChange(filter.copy(type = updatedTypes))
                                     },
-                                    label = { Text(type.displayName) },
+                                    label = { Text(typeName) },
                                     leadingIcon = if (isSelected) {
                                         { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                     } else null,

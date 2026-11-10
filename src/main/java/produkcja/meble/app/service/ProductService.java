@@ -6,7 +6,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import produkcja.meble.app.dto.ProductRequest;
 import produkcja.meble.app.dto.ProductResponse;
-import produkcja.meble.app.entity.FurnitureType;
 import produkcja.meble.app.entity.Product;
 import produkcja.meble.app.exception.ConflictException;
 import produkcja.meble.app.exception.ResourceNotFoundException;
@@ -47,9 +46,9 @@ public class ProductService {
         return productMapper.toResponse(savedProduct);
     }
 
-    public List<ProductResponse> findAllProducts(List<FurnitureType> types) {
+    public List<ProductResponse> findAllProducts(List<String> types) {
         List<Product> products;
-        if(types == null) {
+        if (types == null || types.isEmpty()) {
             products = productRepository.findAll();
         } else {
             products = productRepository.findByTypeIn(types);

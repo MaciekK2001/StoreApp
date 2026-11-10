@@ -18,6 +18,7 @@ import produkcja.meble.mobile.data.AuthSession
 import produkcja.meble.mobile.data.CreateOrderRequest
 import produkcja.meble.mobile.data.CreateProductRequest
 import produkcja.meble.mobile.data.FurnitureOrder
+import produkcja.meble.mobile.data.FurnitureTypeItem
 import produkcja.meble.mobile.data.LoginRequest
 import produkcja.meble.mobile.data.OrderStatus
 import produkcja.meble.mobile.data.Product
@@ -38,6 +39,7 @@ data class FurnitureUiState(
     val session: AuthSession? = null,
     val section: MainSection = MainSection.PRODUCTS,
     val products: List<Product> = emptyList(),
+    val furnitureTypes: List<FurnitureTypeItem> = emptyList(),
     val orders: List<FurnitureOrder> = emptyList(),
     val selectedOrder: FurnitureOrder? = null,
     val error: String? = null,
@@ -299,6 +301,64 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun createFurnitureType(
+        name: String,
+        onSuccess: (FurnitureTypeItem) -> Unit,
+        onError: (String) -> Unit,
+    ) {
+        val session = _uiState.value.session ?: run {
+            onError("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val created = withContext(Dispatchers.IO) {
+                    api.createFurnitureType(name.trim(), session)
+                }
+                _uiState.update { current ->
+                    current.copy(furnitureTypes = (current.furnitureTypes + created).sortedBy { it.name })
+                }
+                onSuccess(created)
+            } catch (exception: Exception) {
+                Log.e("FurnitureViewModel", "Błąd dodawania typu mebla", exception)
+                val userMsg = exception.toUserMessage()
+                if (exception is ApiException && exception.statusCode == 401) {
+                    handleAuthorizedError(exception)
+                }
+                onError(userMsg)
+            }
+        }
+    }
+
+    fun deleteFurnitureType(
+        id: Long,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit,
+    ) {
+        val session = _uiState.value.session ?: run {
+            onError("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    api.deleteFurnitureType(id, session)
+                }
+                _uiState.update { current ->
+                    current.copy(furnitureTypes = current.furnitureTypes.filter { it.id != id })
+                }
+                onSuccess()
+            } catch (exception: Exception) {
+                Log.e("FurnitureViewModel", "Błąd usuwania typu mebla", exception)
+                val userMsg = exception.toUserMessage()
+                if (exception is ApiException && exception.statusCode == 401) {
+                    handleAuthorizedError(exception)
+                }
+                onError(userMsg)
+            }
+        }
+    }
+
     fun deleteProduct(
         id: Long,
         onSuccess: (String) -> Unit,
@@ -524,10 +584,17 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private suspend fun loadDashboard(session: AuthSession) {
-        val (products, orders) = withContext(Dispatchers.IO) {
+        val (products, orders, types) = withContext(Dispatchers.IO) {
             val productsDeferred = async { api.getProducts(session) }
             val ordersDeferred = async { fetchOrders(session) }
-            Pair(productsDeferred.await(), ordersDeferred.await())
+            val typesDeferred = async {
+                try {
+                    api.getFurnitureTypes(session)
+                } catch (e: Exception) {
+                    emptyList()
+                }
+            }
+            Triple(productsDeferred.await(), ordersDeferred.await(), typesDeferred.await())
         }
         _uiState.update {
             it.copy(
@@ -535,6 +602,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
                 loading = false,
                 products = products,
                 orders = orders,
+                furnitureTypes = types,
                 error = null,
             )
         }

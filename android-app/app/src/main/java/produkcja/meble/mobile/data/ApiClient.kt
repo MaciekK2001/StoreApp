@@ -20,6 +20,32 @@ class ApiClient(private val baseUrl: String) {
         return parseAuthSession(JSONObject(response))
     }
 
+    fun getFurnitureTypes(session: AuthSession): List<FurnitureTypeItem> {
+        val response = sendJson("GET", "/api/furniture-types", null, session.authorizationHeader)
+        return parseArray(response) { json ->
+            FurnitureTypeItem(
+                id = json.getLong("id"),
+                name = json.getString("name"),
+            )
+        }
+    }
+
+    fun createFurnitureType(name: String, session: AuthSession): FurnitureTypeItem {
+        val payload = JSONObject().apply {
+            put("name", name)
+        }
+        val response = sendJson("POST", "/api/furniture-types", payload.toString(), session.authorizationHeader)
+        val json = JSONObject(response)
+        return FurnitureTypeItem(
+            id = json.getLong("id"),
+            name = json.getString("name"),
+        )
+    }
+
+    fun deleteFurnitureType(id: Long, session: AuthSession) {
+        sendJson("DELETE", "/api/furniture-types/$id", null, session.authorizationHeader)
+    }
+
     fun getProducts(session: AuthSession): List<Product> {
         val response = sendJson("GET", "/api/products", null, session.authorizationHeader)
         return parseArray(response, ::parseProduct)

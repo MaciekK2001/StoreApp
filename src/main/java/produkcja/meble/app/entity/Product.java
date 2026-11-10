@@ -38,8 +38,7 @@ public class Product {
     @Column(nullable = false, unique = true)
     private String model;
 
-    @Enumerated(EnumType.STRING)
-    private FurnitureType type;
+        private String type;
 
     private String material;
 

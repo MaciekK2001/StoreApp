@@ -14,6 +14,9 @@ import produkcja.meble.app.entity.AccountRole;
 import produkcja.meble.app.entity.UserAccount;
 import produkcja.meble.app.repository.OrderRepository;
 import produkcja.meble.app.repository.ProductRepository;
+import produkcja.meble.app.entity.FurnitureType;
+import produkcja.meble.app.entity.Product;
+import produkcja.meble.app.repository.FurnitureTypeRepository;
 import produkcja.meble.app.repository.UserAccountRepository;
 import produkcja.meble.app.service.OrderService;
 import produkcja.meble.app.service.ProductService;
@@ -32,11 +35,35 @@ public class SampleDataLoader implements CommandLineRunner {
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
     private final UserAccountRepository userAccountRepository;
+    private final FurnitureTypeRepository furnitureTypeRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
     public void run(String @NonNull ... args) {
         UserAccount admin = loadUsers();
+
+        List<String> defaultTypes = List.of(
+                "Krzesło", "Fotel", "Sofa", "Narożnik", "Stół", "Stolik kawowy",
+                "Biurko", "Łóżko", "Szafa", "Regał", "Komoda", "Szafka nocna", "Półka"
+        );
+        for (String typeName : defaultTypes) {
+            if (!furnitureTypeRepository.existsByNameIgnoreCase(typeName)) {
+                furnitureTypeRepository.save(FurnitureType.builder().name(typeName).build());
+            }
+        }
+
+        for (Product p : productRepository.findAll()) {
+            if ("BED".equalsIgnoreCase(p.getType())) {
+                p.setType("Łóżko");
+                productRepository.save(p);
+            } else if ("SOFA".equalsIgnoreCase(p.getType())) {
+                p.setType("Sofa");
+                productRepository.save(p);
+            } else if ("WARDROBE".equalsIgnoreCase(p.getType())) {
+                p.setType("Szafa");
+                productRepository.save(p);
+            }
+        }
 
         if (productRepository.count() > 0 || orderRepository.count() > 0) {
             return;
@@ -49,7 +76,7 @@ public class SampleDataLoader implements CommandLineRunner {
                 .depth(90)
                 .colour("Dark brown")
                 .model("Kanciate")
-                .type("BED")
+                .type("Łóżko")
                 .material("Oak")
                 .fabric("Leather")
                 .remarks("Sample bed")
@@ -64,7 +91,7 @@ public class SampleDataLoader implements CommandLineRunner {
                 .depth(110)
                 .colour("Grey")
                 .model("Moderno")
-                .type("SOFA")
+                .type("Sofa")
                 .material("Beech")
                 .fabric("Velour")
                 .remarks("Sample sofa")
@@ -79,7 +106,7 @@ public class SampleDataLoader implements CommandLineRunner {
                 .depth(65)
                 .colour("White")
                 .model("Praktik")
-                .type("WARDROBE")
+                .type("Szafa")
                 .material("Laminated board")
                 .fabric(null)
                 .remarks("Sample wardrobe")

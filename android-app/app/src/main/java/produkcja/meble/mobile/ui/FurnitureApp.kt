@@ -16,6 +16,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Category
+import produkcja.meble.mobile.data.FurnitureTypeItem
+import produkcja.meble.mobile.ui.products.ManageFurnitureTypesDialog
 import androidx.compose.material.icons.filled.Chair
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -141,6 +144,8 @@ fun FurnitureApp(viewModel: FurnitureViewModel) {
                             },
                         )
                     },
+                    onCreateFurnitureType = viewModel::createFurnitureType,
+                    onDeleteFurnitureType = viewModel::deleteFurnitureType,
                     onSelectOrderStatusFilter = viewModel::setSelectedOrderStatusFilter,
                     onToggleShowActiveOrders = viewModel::setShowOnlyActiveOrders,
                 )
@@ -168,6 +173,8 @@ private fun Dashboard(
     onDeleteOrder: (FurnitureOrder, (String) -> Unit, (String) -> Unit) -> Unit,
     onToggleOrderStatus: (FurnitureOrder, Boolean, (String) -> Unit, (String) -> Unit) -> Unit,
     onUpdateOrderStatus: (FurnitureOrder, OrderStatus) -> Unit,
+    onCreateFurnitureType: (String, (FurnitureTypeItem) -> Unit, (String) -> Unit) -> Unit,
+    onDeleteFurnitureType: (Long, () -> Unit, (String) -> Unit) -> Unit,
     onSelectOrderStatusFilter: (OrderStatus?) -> Unit,
     onToggleShowActiveOrders: (Boolean) -> Unit,
 ) {
@@ -205,6 +212,7 @@ private fun Dashboard(
     )
 
     // Dialog states
+    var showManageFurnitureTypesDialog by rememberSaveable { mutableStateOf(false) }
     var showCreateProductDialog by rememberSaveable { mutableStateOf(false) }
     var productToEdit by remember { mutableStateOf<Product?>(null) }
     var productToDelete by remember { mutableStateOf<Product?>(null) }
@@ -214,6 +222,9 @@ private fun Dashboard(
     var orderToDelete by remember { mutableStateOf<FurnitureOrder?>(null) }
 
     // Hierarchical back navigation handling
+    BackHandler(enabled = showManageFurnitureTypesDialog) {
+        showManageFurnitureTypesDialog = false
+    }
     BackHandler(enabled = orderToDelete != null) {
         orderToDelete = null
     }
@@ -291,6 +302,15 @@ private fun Dashboard(
                     }
                 },
                 actions = {
+                    if (state.section == MainSection.PRODUCTS && selectedOrder == null) {
+                        IconButton(onClick = { showManageFurnitureTypesDialog = true }) {
+                            Icon(
+                                Icons.Default.Category,
+                                contentDescription = "Zarządzaj typami mebli",
+                                tint = topBarActionColor,
+                            )
+                        }
+                    }
                     if (state.loading) {
                         CircularProgressIndicator(
                             modifier = Modifier
@@ -442,8 +462,10 @@ private fun Dashboard(
                     "products" -> {
                         ProductList(
                             products = state.products,
+                            furnitureTypes = state.furnitureTypes,
                             onEditProduct = { productToEdit = it },
                             onDeleteProduct = { productToDelete = it },
+                            onManageFurnitureTypes = { showManageFurnitureTypesDialog = true },
                         )
                     }
 
@@ -486,6 +508,9 @@ private fun Dashboard(
         ProductFormDialog(
             initialProduct = null,
             existingProducts = state.products,
+            furnitureTypes = state.furnitureTypes,
+            onCreateType = onCreateFurnitureType,
+            onDeleteType = onDeleteFurnitureType,
             onDismiss = { showCreateProductDialog = false },
             onSave = { request, imageBytes, fileName, mimeType, additionalImagesBytes, onDialogSuccess, onDialogError ->
                 onCreateProduct(
@@ -514,6 +539,9 @@ private fun Dashboard(
         ProductFormDialog(
             initialProduct = product,
             existingProducts = state.products,
+            furnitureTypes = state.furnitureTypes,
+            onCreateType = onCreateFurnitureType,
+            onDeleteType = onDeleteFurnitureType,
             onDismiss = { productToEdit = null },
             onSave = { request, imageBytes, fileName, mimeType, additionalImagesBytes, onDialogSuccess, onDialogError ->
                 onUpdateProduct(
@@ -640,6 +668,15 @@ private fun Dashboard(
                 )
             },
             onDismiss = { orderToDelete = null },
+        )
+    }
+
+    if (showManageFurnitureTypesDialog) {
+        ManageFurnitureTypesDialog(
+            types = state.furnitureTypes,
+            onDismiss = { showManageFurnitureTypesDialog = false },
+            onCreateType = onCreateFurnitureType,
+            onDeleteType = onDeleteFurnitureType,
         )
     }
 }
