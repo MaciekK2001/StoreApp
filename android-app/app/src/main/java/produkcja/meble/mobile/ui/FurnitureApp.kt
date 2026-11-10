@@ -304,15 +304,7 @@ private fun Dashboard(
                     }
                 },
                 actions = {
-                    if (state.section == MainSection.PRODUCTS && selectedOrder == null) {
-                        IconButton(onClick = { showManageFurnitureTypesDialog = true }) {
-                            Icon(
-                                Icons.Default.Category,
-                                contentDescription = "Zarządzaj typami mebli",
-                                tint = topBarActionColor,
-                            )
-                        }
-                    }
+
                     if (state.loading) {
                         CircularProgressIndicator(
                             modifier = Modifier
@@ -544,6 +536,7 @@ private fun Dashboard(
             furnitureTypes = state.furnitureTypes,
             onCreateType = onCreateFurnitureType,
             onDeleteType = onDeleteFurnitureType,
+            onSeedDefaults = onSeedDefaultFurnitureTypes,
             onDismiss = { productToEdit = null },
             onSave = { request, imageBytes, fileName, mimeType, additionalImagesBytes, onDialogSuccess, onDialogError ->
                 onUpdateProduct(

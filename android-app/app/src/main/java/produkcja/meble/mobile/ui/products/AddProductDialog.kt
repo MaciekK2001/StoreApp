@@ -110,6 +110,7 @@ fun ProductFormDialog(
     furnitureTypes: List<FurnitureTypeItem> = emptyList(),
     onCreateType: ((name: String, onSuccess: (FurnitureTypeItem) -> Unit, onError: (String) -> Unit) -> Unit)? = null,
     onDeleteType: ((id: Long, onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit)? = null,
+    onSeedDefaults: (((onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit))? = null,
     onDismiss: () -> Unit,
     onSave: (
         request: CreateProductRequest,
@@ -178,7 +179,8 @@ fun ProductFormDialog(
 
     var attemptedSubmit by rememberSaveable { mutableStateOf(false) }
     var isSaving by rememberSaveable { mutableStateOf(false) }
-        BackHandler(enabled = !isSaving) { onDismiss() }
+    BackHandler(enabled = showManageTypesDialog) { showManageTypesDialog = false }
+    BackHandler(enabled = !showManageTypesDialog && !isSaving) { onDismiss() }
     var apiErrorMessage by rememberSaveable { mutableStateOf<String?>(null) }
 
     val isModelDuplicate = remember(model, existingProducts, initialProduct) {
@@ -1062,6 +1064,25 @@ fun ProductFormDialog(
             }
         }
     }
+
+    if (showManageTypesDialog && onCreateType != null && onDeleteType != null) {
+        ManageFurnitureTypesDialog(
+            types = furnitureTypes,
+            onDismiss = { showManageTypesDialog = false },
+            onCreateType = { name, onSuccess, onError ->
+                onCreateType(
+                    name,
+                    { created ->
+                        selectedTypeName = created.name
+                        onSuccess(created)
+                    },
+                    onError,
+                )
+            },
+            onDeleteType = onDeleteType,
+            onSeedDefaults = onSeedDefaults,
+        )
+    }
 }
 
 @Composable
@@ -1070,6 +1091,7 @@ fun AddProductDialog(
     furnitureTypes: List<FurnitureTypeItem> = emptyList(),
     onCreateType: ((name: String, onSuccess: (FurnitureTypeItem) -> Unit, onError: (String) -> Unit) -> Unit)? = null,
     onDeleteType: ((id: Long, onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit)? = null,
+    onSeedDefaults: (((onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit))? = null,
     onDismiss: () -> Unit,
     onSave: (
         request: CreateProductRequest,
@@ -1087,6 +1109,7 @@ fun AddProductDialog(
         furnitureTypes = furnitureTypes,
         onCreateType = onCreateType,
         onDeleteType = onDeleteType,
+        onSeedDefaults = onSeedDefaults,
         onDismiss = onDismiss,
         onSave = onSave,
     )
