@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import produkcja.meble.app.entity.FurnitureType;
@@ -20,6 +21,7 @@ public class FurnitureTypeInitializer implements ApplicationRunner {
 
     private final FurnitureTypeRepository furnitureTypeRepository;
     private final ProductRepository productRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     private static final List<String> DEFAULT_TYPES = List.of(
             "Krzesło", "Fotel", "Sofa", "Narożnik", "Stół", "Stolik kawowy",
@@ -29,6 +31,9 @@ public class FurnitureTypeInitializer implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        // 0. Usunięcie starego więzu CHECK z PostgreSQL (np. product_type_check), który Hibernate utworzył, gdy typ był Enumem
+        dropLegacyCheckConstraints();
+
         // 1. Zapewnij domyślne typy w bazie danych dla każdego środowiska (w tym Render / Prod)
         for (String typeName : DEFAULT_TYPES) {
             if (!furnitureTypeRepository.existsByNameIgnoreCase(typeName)) {
@@ -70,6 +75,16 @@ public class FurnitureTypeInitializer implements ApplicationRunner {
                     log.info("Dodano brakujący typ mebla z istniejącego produktu: {}", p.getType());
                 }
             }
+        }
+    }
+
+    private void dropLegacyCheckConstraints() {
+        try {
+            // PostgreSQL: usuń check constraint z kolumny type w tabeli product
+            jdbcTemplate.execute("ALTER TABLE product DROP CONSTRAINT IF EXISTS product_type_check");
+            log.info("Pomyślnie usunięto stary więz integralności product_type_check.");
+        } catch (Exception e) {
+            log.warn("Nie udało się usunąć więzu product_type_check (może nie istnieć w tej bazie): {}", e.getMessage());
         }
     }
 }
