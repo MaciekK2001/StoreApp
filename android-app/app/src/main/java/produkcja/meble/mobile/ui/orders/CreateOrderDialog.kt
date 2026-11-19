@@ -2032,12 +2032,6 @@ private fun ProductPickerDialog(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                         )
-                        val totalCount = orderItems.sumOf { it.quantity }
-                        Text(
-                            text = if (totalCount > 0) "W zamówieniu: $totalCount szt." else "Brak mebli w zamówieniu",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                     }
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, contentDescription = "Zamknij")
@@ -2108,10 +2102,6 @@ private fun ProductPickerDialog(
                                     }
 
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        ) {
                                             Text(
                                                 text = product.model,
                                                 style = MaterialTheme.typography.bodyLarge,
@@ -2123,14 +2113,14 @@ private fun ProductPickerDialog(
                                                     shape = RoundedCornerShape(4.dp),
                                                 ) {
                                                     Text(
-                                                        text = "W zamówieniu: $currentCountInOrder szt.",
+                                                        text = "$currentCountInOrder szt.",
                                                         style = MaterialTheme.typography.labelSmall,
                                                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                         fontWeight = FontWeight.Bold,
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
                                                     )
                                                 }
-                                            }
+
                                         }
                                         Text(
                                             text = "${FurnitureType.displayLabel(product.type)} • ${money(product.price)}",

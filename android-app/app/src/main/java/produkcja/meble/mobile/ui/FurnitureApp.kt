@@ -505,6 +505,7 @@ private fun Dashboard(
             furnitureTypes = state.furnitureTypes,
             onCreateType = onCreateFurnitureType,
             onDeleteType = onDeleteFurnitureType,
+            onSeedDefaults = onSeedDefaultFurnitureTypes,
             onDismiss = { showCreateProductDialog = false },
             onSave = { request, imageBytes, fileName, mimeType, additionalImagesBytes, onDialogSuccess, onDialogError ->
                 onCreateProduct(

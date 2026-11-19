@@ -70,6 +70,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -127,15 +128,18 @@ fun ProductFormDialog(
 
     var model by rememberSaveable { mutableStateOf(initialProduct?.model.orEmpty()) }
     val typeNames = remember(furnitureTypes) {
-        if (furnitureTypes.isNotEmpty()) furnitureTypes.map { it.name }
-        else FurnitureType.entries.map { it.displayName }
+        furnitureTypes.map { it.name }
     }
     var selectedTypeName by rememberSaveable {
         mutableStateOf(
             initialProduct?.type?.let { FurnitureType.displayLabel(it) }
-                ?: typeNames.firstOrNull()
-                ?: "Krzesło",
+                ?: typeNames.firstOrNull().orEmpty(),
         )
+    }
+    LaunchedEffect(typeNames) {
+        if (selectedTypeName.isBlank() && typeNames.isNotEmpty()) {
+            selectedTypeName = typeNames.first()
+        }
     }
     var typeExpanded by rememberSaveable { mutableStateOf(false) }
     var showManageTypesDialog by rememberSaveable { mutableStateOf(false) }
@@ -190,6 +194,7 @@ fun ProductFormDialog(
         }
     }
     val isModelValid = model.trim().isNotBlank() && !isModelDuplicate
+    val isTypeValid = selectedTypeName.trim().isNotBlank()
     val isLengthValid = length.trim().toDoubleOrNull()?.let { it > 0 } ?: false
     val isDepthValid = depth.trim().toDoubleOrNull()?.let { it > 0 } ?: false
     val isHeightValid = height.trim().toDoubleOrNull()?.let { it > 0 } ?: false
@@ -742,6 +747,10 @@ fun ProductFormDialog(
                                         onValueChange = {},
                                         readOnly = true,
                                         label = { Text("Typ *") },
+                                        isError = attemptedSubmit && !isTypeValid,
+                                        supportingText = if (attemptedSubmit && !isTypeValid) {
+                                            { Text("Wybierz lub dodaj typ mebla.") }
+                                        } else null,
                                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
                                         modifier = Modifier
                                             .menuAnchor(MenuAnchorType.PrimaryNotEditable)
@@ -751,14 +760,28 @@ fun ProductFormDialog(
                                         expanded = typeExpanded,
                                         onDismissRequest = { typeExpanded = false },
                                     ) {
-                                        typeNames.forEach { typeName ->
+                                        if (typeNames.isEmpty()) {
                                             DropdownMenuItem(
-                                                text = { Text(typeName) },
-                                                onClick = {
-                                                    selectedTypeName = typeName
-                                                    typeExpanded = false
+                                                text = {
+                                                    Text(
+                                                        "Brak zdefiniowanych typów",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    )
                                                 },
+                                                onClick = {},
+                                                enabled = false,
                                             )
+                                        } else {
+                                            typeNames.forEach { typeName ->
+                                                DropdownMenuItem(
+                                                    text = { Text(typeName) },
+                                                    onClick = {
+                                                        selectedTypeName = typeName
+                                                        typeExpanded = false
+                                                    },
+                                                )
+                                            }
                                         }
                                         if (onCreateType != null && onDeleteType != null) {
                                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -792,8 +815,8 @@ fun ProductFormDialog(
                                 OutlinedTextField(
                                     value = price,
                                     onValueChange = { price = it },
-                                    label = { Text("Cena (PLN) *") },
-                                    placeholder = { Text("np. 1499.00") },
+                                    label = { Text("Cena (zł) *") },
+                                    placeholder = { Text("np. 1899.99") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     isError = attemptedSubmit && !isPriceValid,
                                     supportingText = if (attemptedSubmit && !isPriceValid) {
@@ -841,7 +864,7 @@ fun ProductFormDialog(
                                     OutlinedTextField(
                                         value = length,
                                         onValueChange = { length = it },
-                                        label = { Text("Długość *") },
+                                        label = { Text("Dł. *") },
                                         placeholder = { Text("cm") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         isError = attemptedSubmit && !isLengthValid,
@@ -851,7 +874,7 @@ fun ProductFormDialog(
                                     OutlinedTextField(
                                         value = depth,
                                         onValueChange = { depth = it },
-                                        label = { Text("Gł./Szer. *") },
+                                        label = { Text("Gł. *") },
                                         placeholder = { Text("cm") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         isError = attemptedSubmit && !isDepthValid,
@@ -861,7 +884,7 @@ fun ProductFormDialog(
                                     OutlinedTextField(
                                         value = height,
                                         onValueChange = { height = it },
-                                        label = { Text("Wysokość *") },
+                                        label = { Text("Wys. *") },
                                         placeholder = { Text("cm") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         isError = attemptedSubmit && !isHeightValid,
@@ -929,6 +952,7 @@ fun ProductFormDialog(
                                     label = { Text("Wyposażenie dodatkowe") },
                                     placeholder = { Text("np. Pojemnik na pościel, automat DL") },
                                     modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
                                 )
 
                                 OutlinedTextField(
@@ -962,7 +986,7 @@ fun ProductFormDialog(
                         Button(
                             onClick = {
                                 attemptedSubmit = true
-                                if (isModelValid && isLengthValid && isDepthValid && isHeightValid && isPriceValid) {
+                                if (isModelValid && isTypeValid && isLengthValid && isDepthValid && isHeightValid && isPriceValid) {
                                     val parsedPrice = price.trim().replace(',', '.').toDouble()
                                     val parsedLength = length.trim().toDouble()
                                     val parsedDepth = depth.trim().toDouble()

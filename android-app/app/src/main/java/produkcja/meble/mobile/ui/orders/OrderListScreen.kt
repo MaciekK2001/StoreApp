@@ -1,12 +1,5 @@
 package produkcja.meble.mobile.ui.orders
 
-import androidx.compose.foundation.border
-import androidx.compose.material.icons.filled.Chair
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import produkcja.meble.mobile.ui.common.resolveImageUrl
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -14,12 +7,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Chair
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
@@ -70,16 +67,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import produkcja.meble.mobile.data.FurnitureOrder
+import produkcja.meble.mobile.data.OrderFilter
+import produkcja.meble.mobile.data.OrderSortOption
 import produkcja.meble.mobile.data.OrderStatus
 import produkcja.meble.mobile.ui.common.EmptyState
 import produkcja.meble.mobile.ui.common.date
 import produkcja.meble.mobile.ui.common.isMeaningful
+import produkcja.meble.mobile.ui.common.money
+import produkcja.meble.mobile.ui.common.resolveImageUrl
 import produkcja.meble.mobile.ui.theme.orderListBackgroundColor
 import produkcja.meble.mobile.ui.theme.orderSectionStyle
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OrderList(
     orders: List<FurnitureOrder>,
@@ -98,12 +105,64 @@ fun OrderList(
     val backgroundColor = orderListBackgroundColor(isDark)
 
     var orderForStatusChange by remember { mutableStateOf<FurnitureOrder?>(null) }
+    var orderFilter by remember { mutableStateOf(OrderFilter()) }
+    val statusScrollState = rememberScrollState()
 
-    val displayedOrders = remember(orders, selectedStatus) {
+    val displayedOrders = remember(orders, selectedStatus, orderFilter) {
+        var result = orders
+
+        // 1. Filtrowanie po statusie (z zakładek u góry)
         if (selectedStatus != null) {
-            orders.filter { it.orderStatus == selectedStatus }
-        } else {
-            orders
+            result = result.filter { it.orderStatus == selectedStatus }
+        }
+
+        // 2. Wyszukiwanie tekstowe
+        if (orderFilter.query.isNotBlank()) {
+            val q = orderFilter.query.trim().lowercase()
+            result = result.filter { order ->
+                order.id.toString().contains(q) ||
+                    "#${order.id}".contains(q) ||
+                    order.address.lowercase().contains(q) ||
+                    order.phoneNumber.lowercase().contains(q) ||
+                    (order.createdBy?.username?.lowercase()?.contains(q) == true) ||
+                    order.remarks.lowercase().contains(q) ||
+                    order.contactRemarks.lowercase().contains(q) ||
+                    order.items.any { item ->
+                        (item.product?.model?.lowercase()?.contains(q) == true) ||
+                            (item.product?.type?.lowercase()?.contains(q) == true) ||
+                            (item.remarks.lowercase().contains(q))
+                    }
+            }
+        }
+
+        // 3. Filtrowanie po cenie
+        if (orderFilter.minPrice != null) {
+            result = result.filter { it.totalPrice >= orderFilter.minPrice!! }
+        }
+        if (orderFilter.maxPrice != null) {
+            result = result.filter { it.totalPrice <= orderFilter.maxPrice!! }
+        }
+
+        // 4. Filtrowanie po dacie dostawy
+        if (!orderFilter.dateFrom.isNullOrBlank()) {
+            val from = orderFilter.dateFrom!!.trim()
+            result = result.filter { it.deliveryDate.substringBefore('T') >= from }
+        }
+        if (!orderFilter.dateTo.isNullOrBlank()) {
+            val to = orderFilter.dateTo!!.trim()
+            result = result.filter { it.deliveryDate.substringBefore('T') <= to }
+        }
+
+        // 5. Sortowanie
+        when (orderFilter.sortBy) {
+            OrderSortOption.DELIVERY_DATE_ASC -> result.sortedBy { it.deliveryDate }
+            OrderSortOption.DELIVERY_DATE_DESC -> result.sortedByDescending { it.deliveryDate }
+            OrderSortOption.CREATED_AT_DESC -> result.sortedByDescending { it.createdAt }
+            OrderSortOption.CREATED_AT_ASC -> result.sortedBy { it.createdAt }
+            OrderSortOption.PRICE_DESC -> result.sortedByDescending { it.totalPrice }
+            OrderSortOption.PRICE_ASC -> result.sortedBy { it.totalPrice }
+            OrderSortOption.ID_DESC -> result.sortedByDescending { it.id }
+            OrderSortOption.ID_ASC -> result.sortedBy { it.id }
         }
     }
 
@@ -167,368 +226,429 @@ fun OrderList(
         )
     }
 
-    Column(
+    LazyColumn(
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 80.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor),
     ) {
-        val scrollState = rememberScrollState()
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(scrollState)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val filterOptions = listOf(
-                null to "Wszystkie",
-                OrderStatus.ACTIVE to "Aktywne",
-                OrderStatus.COMPLETED to "Zrealizowane",
-                OrderStatus.CANCELLED to "Anulowane",
+        // Karta filtrów i sortowania
+        item(key = "order_filter") {
+            OrderFilterCard(
+                filter = orderFilter,
+                onFilterChange = { orderFilter = it },
+                modifier = Modifier.fillMaxWidth(),
             )
-            filterOptions.forEach { (status, label) ->
-                val isSelected = selectedStatus == status
-                FilterChip(
-                    selected = isSelected,
-                    onClick = {
-                        onSelectStatus(status)
-                        onToggleShowActive(status == OrderStatus.ACTIVE)
+        }
+
+        // Zakładki szybkiego wyboru statusu
+        item(key = "status_tabs") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(statusScrollState)
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val filterOptions = listOf(
+                    null to "Wszystkie",
+                    OrderStatus.ACTIVE to "Aktywne",
+                    OrderStatus.COMPLETED to "Zrealizowane",
+                    OrderStatus.CANCELLED to "Anulowane",
+                )
+                filterOptions.forEach { (status, label) ->
+                    val isSelected = selectedStatus == status
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = {
+                            onSelectStatus(status)
+                            onToggleShowActive(status == OrderStatus.ACTIVE)
+                        },
+                        label = { Text(label) },
+                        leadingIcon = if (isSelected) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        } else null,
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = if (isDark) Color(0xFF131F2E) else Color(0xFFEDF3FA),
+                            labelColor = if (isDark) Color(0xFFCBDDF0) else Color(0xFF1C3A5A),
+                            selectedContainerColor = orderStyle.container,
+                            selectedLabelColor = orderStyle.onContainer,
+                            selectedLeadingIconColor = orderStyle.primary,
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = isSelected,
+                            borderColor = orderStyle.cardBorder.copy(alpha = 0.85f),
+                            selectedBorderColor = orderStyle.primary,
+                            borderWidth = 1.dp,
+                            selectedBorderWidth = 1.5.dp,
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                    )
+                }
+            }
+        }
+
+        // Licznik zamówień i wskaźnik aktywnych filtrów
+        item(key = "order_count") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Zamówienia: ${displayedOrders.size}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (!orderFilter.isEmpty) {
+                    Text(
+                        text = "Aktywne filtry (${orderFilter.activeCount})",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = orderStyle.primary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+
+        // Pusta lista
+        if (displayedOrders.isEmpty()) {
+            item(key = "empty_state") {
+                val hasFilters = !orderFilter.isEmpty
+                EmptyState(
+                    title = if (hasFilters) "Brak pasujących zamówień" else when (selectedStatus) {
+                        OrderStatus.ACTIVE -> "Brak aktywnych zamówień"
+                        OrderStatus.COMPLETED -> "Brak zrealizowanych zamówień"
+                        OrderStatus.CANCELLED -> "Brak anulowanych zamówień"
+                        null -> "Brak zamówień"
                     },
-                    label = { Text(label) },
-                    leadingIcon = if (isSelected) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                    } else null,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = orderStyle.container,
-                        selectedLabelColor = orderStyle.onContainer,
-                        selectedLeadingIconColor = orderStyle.primary,
-                    ),
+                    message = if (hasFilters) "Żadne zamówienie nie spełnia kryteriów filtrów." else when (selectedStatus) {
+                        OrderStatus.ACTIVE -> "Nowe aktywne zamówienia pojawią się tutaj."
+                        OrderStatus.COMPLETED -> "Zrealizowane zamówienia pojawią się tutaj."
+                        OrderStatus.CANCELLED -> "Anulowane zamówienia pojawią się tutaj."
+                        null -> "Baza zamówień jest pusta."
+                    },
+                    icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                    iconTint = orderStyle.primary,
+                    titleColor = orderStyle.primary,
+                    modifier = Modifier.padding(top = 40.dp),
                 )
             }
         }
 
-        if (displayedOrders.isEmpty()) {
-            val emptyTitle = when (selectedStatus) {
-                OrderStatus.ACTIVE -> "Brak aktywnych zamówień"
-                OrderStatus.COMPLETED -> "Brak zrealizowanych zamówień"
-                OrderStatus.CANCELLED -> "Brak anulowanych zamówień"
-                null -> "Brak zamówień"
-            }
-            val emptyDesc = when (selectedStatus) {
-                OrderStatus.ACTIVE -> "Nowe aktywne zamówienia pojawią się tutaj."
-                OrderStatus.COMPLETED -> "Zrealizowane zamówienia pojawią się tutaj."
-                OrderStatus.CANCELLED -> "Anulowane zamówienia pojawią się tutaj."
-                null -> "Baza zamówień jest pusta."
-            }
-            EmptyState(
-                title = emptyTitle,
-                message = emptyDesc,
-                icon = Icons.AutoMirrored.Filled.ReceiptLong,
-                iconTint = orderStyle.primary,
-                titleColor = orderStyle.primary,
-            )
-        } else {
-            LazyColumn(
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                items(displayedOrders, key = FurnitureOrder::id) { order ->
-                    var isActionsExpanded by rememberSaveable { mutableStateOf(false) }
+        // Karty zamówień
+        items(displayedOrders, key = FurnitureOrder::id) { order ->
+            var isActionsExpanded by rememberSaveable { mutableStateOf(false) }
 
-                    Card(
-                        onClick = { onOrderSelected(order) },
+            Card(
+                onClick = { onOrderSelected(order) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = orderStyle.cardBackground,
+                ),
+                border = BorderStroke(1.dp, orderStyle.cardBorder),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = orderStyle.cardBackground,
-                        ),
-                        border = BorderStroke(1.dp, orderStyle.cardBorder),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(modifier = Modifier.padding(18.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.weight(1f, fill = false),
-                                ) {
-                                    Text(
-                                        text = "Zamówienie #${order.id}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                    when (order.orderStatus) {
-                                        OrderStatus.ACTIVE -> {
-                                            Surface(
-                                                color = orderStyle.container,
-                                                shape = MaterialTheme.shapes.extraSmall,
-                                            ) {
-                                                Text(
-                                                    text = "Aktywne",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = orderStyle.onContainer,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                    fontWeight = FontWeight.SemiBold,
-                                                )
-                                            }
-                                        }
-                                        OrderStatus.COMPLETED -> {
-                                            Surface(
-                                                color = MaterialTheme.colorScheme.primaryContainer,
-                                                shape = MaterialTheme.shapes.extraSmall,
-                                            ) {
-                                                Text(
-                                                    text = "Zrealizowane",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                    fontWeight = FontWeight.SemiBold,
-                                                )
-                                            }
-                                        }
-                                        OrderStatus.CANCELLED -> {
-                                            Surface(
-                                                color = MaterialTheme.colorScheme.errorContainer,
-                                                shape = MaterialTheme.shapes.extraSmall,
-                                            ) {
-                                                Text(
-                                                    text = "Anulowane",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                    fontWeight = FontWeight.Bold,
-                                                )
-                                            }
-                                        }
+                        FlowRow(
+                            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f, fill = false),
+                        ) {
+                            Text(
+                                text = "Zamówienie #${order.id}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            when (order.orderStatus) {
+                                OrderStatus.ACTIVE -> {
+                                    Surface(
+                                        color = orderStyle.container,
+                                        shape = MaterialTheme.shapes.extraSmall,
+                                    ) {
+                                        Text(
+                                            text = "Aktywne",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = orderStyle.onContainer,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                        )
                                     }
                                 }
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    Text(
-                                        text = date(order.deliveryDate),
-                                        color = orderStyle.primary,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                    if (onUpdateOrderStatus != null || onToggleStatus != null || onEditOrder != null || onDeleteOrder != null) {
-                                        IconButton(
-                                            onClick = { isActionsExpanded = !isActionsExpanded },
-                                            modifier = Modifier.size(32.dp),
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isActionsExpanded) Icons.Default.ExpandLess else Icons.Default.MoreVert,
-                                                contentDescription = if (isActionsExpanded) "Zwiń opcje" else "Rozwiń opcje",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(18.dp),
-                                            )
-                                        }
+                                OrderStatus.COMPLETED -> {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        shape = MaterialTheme.shapes.extraSmall,
+                                    ) {
+                                        Text(
+                                            text = "Zrealizowane",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                        )
+                                    }
+                                }
+                                OrderStatus.CANCELLED -> {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.errorContainer,
+                                        shape = MaterialTheme.shapes.extraSmall,
+                                    ) {
+                                        Text(
+                                            text = "Anulowane",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                        )
                                     }
                                 }
                             }
-                            Spacer(Modifier.height(10.dp))
-                            Text(order.address, style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                text = order.phoneNumber,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            val creatorUsername = order.createdBy?.username?.takeIf { it.isMeaningful() }
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.padding(top = 8.dp),
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = "Dodał",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = orderStyle.primary,
-                                )
                                 Text(
-                                    text = "Dodał(a): ${creatorUsername ?: "Nieznany"}",
+                                    text = date(order.deliveryDate),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = orderStyle.primary,
                                     fontWeight = FontWeight.Medium,
                                 )
-                            }
-
-                            if (order.items.isNotEmpty()) {
-                                Spacer(Modifier.height(10.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    val displayItems = order.items.take(4)
-                                    displayItems.forEach { item ->
-                                        val firstImage = item.product?.allImages?.firstOrNull()
-                                        if (firstImage != null) {
-                                            val context = LocalContext.current
-                                            val resolvedUrl = remember(firstImage) { resolveImageUrl(firstImage) ?: firstImage }
-                                            val imageRequest = remember(resolvedUrl) {
-                                                ImageRequest.Builder(context).data(resolvedUrl).crossfade(true).build()
-                                            }
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(46.dp)
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                                                    .border(1.dp, orderStyle.cardBorder.copy(alpha = 0.6f), RoundedCornerShape(8.dp)),
-                                            ) {
-                                                AsyncImage(
-                                                    model = imageRequest,
-                                                    contentDescription = item.product?.model,
-                                                    contentScale = ContentScale.Crop,
-                                                    modifier = Modifier.fillMaxSize(),
-                                                )
-                                            }
-                                        } else {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(46.dp)
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(orderStyle.container.copy(alpha = 0.25f))
-                                                    .border(1.dp, orderStyle.cardBorder.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
-                                                contentAlignment = Alignment.Center,
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Chair,
-                                                    contentDescription = null,
-                                                    tint = orderStyle.primary.copy(alpha = 0.5f),
-                                                    modifier = Modifier.size(24.dp),
-                                                )
-                                            }
-                                        }
-                                    }
-                                    if (order.items.size > 4) {
-                                        Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = orderStyle.container.copy(alpha = 0.5f),
-                                            modifier = Modifier.size(46.dp),
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Text(
-                                                    text = "+${order.items.size - 4}",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = orderStyle.primary,
-                                                )
-                                            }
-                                        }
+                                if (onUpdateOrderStatus != null || onToggleStatus != null || onEditOrder != null || onDeleteOrder != null) {
+                                    IconButton(
+                                        onClick = { isActionsExpanded = !isActionsExpanded },
+                                        modifier = Modifier.size(28.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isActionsExpanded) Icons.Default.ExpandLess else Icons.Default.MoreVert,
+                                            contentDescription = if (isActionsExpanded) "Zwiń opcje" else "Rozwiń opcje",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp),
+                                        )
                                     }
                                 }
                             }
+                            Text(
+                                text = money(order.totalPrice),
+                                color = orderStyle.primary,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text(order.address, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = order.phoneNumber,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val creatorUsername = order.createdBy?.username?.takeIf { it.isMeaningful() }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(top = 8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Dodał",
+                            modifier = Modifier.size(16.dp),
+                            tint = orderStyle.primary,
+                        )
+                        Text(
+                            text = "Dodał(a): ${creatorUsername ?: "Nieznany"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = orderStyle.primary,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
 
-                            if (onUpdateOrderStatus != null || onToggleStatus != null || onEditOrder != null || onDeleteOrder != null) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                                )
-
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable { isActionsExpanded = !isActionsExpanded }
-                                        .padding(vertical = 4.dp, horizontal = 2.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    if (order.items.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            val displayItems = order.items.take(4)
+                            displayItems.forEach { item ->
+                                val firstImage = item.product?.allImages?.firstOrNull()
+                                if (firstImage != null) {
+                                    val context = LocalContext.current
+                                    val resolvedUrl = remember(firstImage) { resolveImageUrl(firstImage) ?: firstImage }
+                                    val imageRequest = remember(resolvedUrl) {
+                                        ImageRequest.Builder(context).data(resolvedUrl).crossfade(true).build()
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                                            .border(1.dp, orderStyle.cardBorder.copy(alpha = 0.6f), RoundedCornerShape(8.dp)),
+                                    ) {
+                                        AsyncImage(
+                                            model = imageRequest,
+                                            contentDescription = item.product?.model,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    }
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(orderStyle.container.copy(alpha = 0.25f))
+                                            .border(1.dp, orderStyle.cardBorder.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                                        contentAlignment = Alignment.Center,
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Tune,
+                                            Icons.Default.Chair,
                                             contentDescription = null,
-                                            tint = orderStyle.primary,
-                                            modifier = Modifier.size(16.dp),
+                                            tint = orderStyle.primary.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(24.dp),
                                         )
+                                    }
+                                }
+                            }
+                            if (order.items.size > 4) {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = orderStyle.container.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(46.dp),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
                                         Text(
-                                            text = if (isActionsExpanded) "Zwiń akcje" else "Rozwiń akcje",
+                                            text = "+${order.items.size - 4}",
                                             style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Medium,
+                                            fontWeight = FontWeight.Bold,
                                             color = orderStyle.primary,
                                         )
                                     }
-                                    Icon(
-                                        imageVector = if (isActionsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                        contentDescription = null,
-                                        tint = orderStyle.primary,
-                                        modifier = Modifier.size(18.dp),
-                                    )
                                 }
+                            }
+                        }
+                    }
 
-                                AnimatedVisibility(
-                                    visible = isActionsExpanded,
-                                    enter = expandVertically() + fadeIn(),
-                                    exit = shrinkVertically() + fadeOut(),
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(top = 8.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    if (onUpdateOrderStatus != null || onToggleStatus != null || onEditOrder != null || onDeleteOrder != null) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { isActionsExpanded = !isActionsExpanded },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = null,
+                                    tint = orderStyle.primary,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Text(
+                                    text = if (isActionsExpanded) "Zwiń akcje" else "Rozwiń akcje",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = orderStyle.primary,
+                                )
+                            }
+                            Icon(
+                                imageVector = if (isActionsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                tint = orderStyle.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+
+                        AnimatedVisibility(
+                            visible = isActionsExpanded,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut(),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                if (onUpdateOrderStatus != null || onToggleStatus != null) {
+                                    OutlinedButton(
+                                        onClick = { orderForStatusChange = order },
+                                        modifier = Modifier.weight(1.1f),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
                                     ) {
-                                        if (onUpdateOrderStatus != null || onToggleStatus != null) {
-                                            OutlinedButton(
-                                                onClick = { orderForStatusChange = order },
-                                                modifier = Modifier.weight(1.1f),
-                                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
-                                            ) {
-                                                Icon(
-                                                    imageVector = when (order.orderStatus) {
-                                                        OrderStatus.ACTIVE -> Icons.Default.PlayCircleOutline
-                                                        OrderStatus.COMPLETED -> Icons.Default.CheckCircle
-                                                        OrderStatus.CANCELLED -> Icons.Default.Cancel
-                                                    },
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(16.dp),
-                                                )
-                                                Spacer(Modifier.width(4.dp))
-                                                Text("Status", maxLines = 1)
-                                            }
-                                        }
-                                        if (onEditOrder != null) {
-                                            OutlinedButton(
-                                                onClick = { onEditOrder(order) },
-                                                modifier = Modifier.weight(1f),
-                                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Edit,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(16.dp),
-                                                )
-                                                Spacer(Modifier.width(4.dp))
-                                                Text("Edytuj", maxLines = 1)
-                                            }
-                                        }
-                                        if (onDeleteOrder != null) {
-                                            OutlinedButton(
-                                                onClick = { onDeleteOrder(order) },
-                                                modifier = Modifier.weight(1f),
-                                                colors = ButtonDefaults.outlinedButtonColors(
-                                                    contentColor = MaterialTheme.colorScheme.error,
-                                                ),
-                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
-                                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Delete,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(16.dp),
-                                                )
-                                                Spacer(Modifier.width(4.dp))
-                                                Text("Usuń", maxLines = 1)
-                                            }
-                                        }
+                                        Icon(
+                                            imageVector = when (order.orderStatus) {
+                                                OrderStatus.ACTIVE -> Icons.Default.PlayCircleOutline
+                                                OrderStatus.COMPLETED -> Icons.Default.CheckCircle
+                                                OrderStatus.CANCELLED -> Icons.Default.Cancel
+                                            },
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Status", maxLines = 1)
+                                    }
+                                }
+                                if (onEditOrder != null) {
+                                    OutlinedButton(
+                                        onClick = { onEditOrder(order) },
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Edytuj", maxLines = 1)
+                                    }
+                                }
+                                if (onDeleteOrder != null) {
+                                    OutlinedButton(
+                                        onClick = { onDeleteOrder(order) },
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            contentColor = MaterialTheme.colorScheme.error,
+                                        ),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Usuń", maxLines = 1)
                                     }
                                 }
                             }

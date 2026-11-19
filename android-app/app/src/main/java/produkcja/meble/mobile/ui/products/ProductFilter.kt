@@ -49,7 +49,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import produkcja.meble.mobile.data.FurnitureType
 import produkcja.meble.mobile.data.ProductFilter as ProductFilterData
 import produkcja.meble.mobile.ui.common.number
 
@@ -187,36 +186,41 @@ fun ProductFilter(
                                 }
                             }
                         }
-                        val displayTypes = remember(availableTypes) {
-                            if (availableTypes.isNotEmpty()) availableTypes
-                            else FurnitureType.entries.map { it.displayName }
-                        }
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            displayTypes.forEach { typeName ->
-                                val isSelected = filter.type.contains(typeName)
-                                FilterChip(
-                                    selected = isSelected,
-                                    onClick = {
-                                        val updatedTypes = if (isSelected) {
-                                            filter.type - typeName
-                                        } else {
-                                            filter.type + typeName
-                                        }
-                                        onFilterChange(filter.copy(type = updatedTypes))
-                                    },
-                                    label = { Text(typeName) },
-                                    leadingIcon = if (isSelected) {
-                                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                                    } else null,
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    ),
-                                )
+                        val displayTypes = availableTypes
+                        if (displayTypes.isNotEmpty()) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                displayTypes.forEach { typeName ->
+                                    val isSelected = filter.type.contains(typeName)
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = {
+                                            val updatedTypes = if (isSelected) {
+                                                filter.type - typeName
+                                            } else {
+                                                filter.type + typeName
+                                            }
+                                            onFilterChange(filter.copy(type = updatedTypes))
+                                        },
+                                        label = { Text(typeName) },
+                                        leadingIcon = if (isSelected) {
+                                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                        } else null,
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        ),
+                                    )
+                                }
                             }
+                        } else {
+                            Text(
+                                text = "Brak zdefiniowanych kategorii mebli.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
 

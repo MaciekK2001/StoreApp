@@ -7,8 +7,10 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import produkcja.meble.app.entity.AppMetadata;
 import produkcja.meble.app.entity.FurnitureType;
 import produkcja.meble.app.entity.Product;
+import produkcja.meble.app.repository.AppMetadataRepository;
 import produkcja.meble.app.repository.FurnitureTypeRepository;
 import produkcja.meble.app.repository.ProductRepository;
 
@@ -21,7 +23,10 @@ public class FurnitureTypeInitializer implements ApplicationRunner {
 
     private final FurnitureTypeRepository furnitureTypeRepository;
     private final ProductRepository productRepository;
+    private final AppMetadataRepository appMetadataRepository;
     private final JdbcTemplate jdbcTemplate;
+
+    private static final String SEEDED_FLAG = "furniture_types_seeded";
 
     private static final List<String> DEFAULT_TYPES = List.of(
             "Krzesło", "Fotel", "Sofa", "Narożnik", "Stół", "Stolik kawowy",
@@ -34,12 +39,18 @@ public class FurnitureTypeInitializer implements ApplicationRunner {
         // 0. Usunięcie starego więzu CHECK z PostgreSQL (np. product_type_check), który Hibernate utworzył, gdy typ był Enumem
         dropLegacyCheckConstraints();
 
-        // 1. Zapewnij domyślne typy w bazie danych dla każdego środowiska (w tym Render / Prod)
-        for (String typeName : DEFAULT_TYPES) {
-            if (!furnitureTypeRepository.existsByNameIgnoreCase(typeName)) {
-                furnitureTypeRepository.save(FurnitureType.builder().name(typeName).build());
-                log.info("Zainicjalizowano domyślny typ mebla: {}", typeName);
+        // 1. Zapewnij domyślne typy TYLKO przy pierwszej inicjalizacji bazy danych (aby usunięte przez użytkownika kategorie nie powracały po restarcie)
+        if (!appMetadataRepository.existsById(SEEDED_FLAG)) {
+            if (furnitureTypeRepository.count() == 0 && productRepository.count() == 0) {
+                for (String typeName : DEFAULT_TYPES) {
+                    if (!furnitureTypeRepository.existsByNameIgnoreCase(typeName)) {
+                        furnitureTypeRepository.save(FurnitureType.builder().name(typeName).build());
+                        log.info("Zainicjalizowano domyślny typ mebla: {}", typeName);
+                    }
+                }
             }
+            appMetadataRepository.save(new AppMetadata(SEEDED_FLAG, "true"));
+            log.info("Zapisano flagę inicjalizacji typów mebli (app_metadata). Domyślne kategorie nie będą ponownie narzucane.");
         }
 
         // 2. Migracja starych angielskich enumów w istniejących produktach (np. BED -> Łóżko, SOFA -> Sofa)

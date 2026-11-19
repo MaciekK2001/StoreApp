@@ -151,6 +151,16 @@ data class FurnitureOrder(
 ) {
     val orderStatus: OrderStatus
         get() = if (!active && status == "ACTIVE") OrderStatus.COMPLETED else OrderStatus.from(status)
+
+    val totalPrice: Double
+        get() {
+            val itemsTotal = items.sumOf { it.price * it.quantity }
+            val servicesTotal = assemblyPrice + transportPrice + carryProductsPrice
+            return ((itemsTotal + servicesTotal) - discount).coerceAtLeast(0.0)
+        }
+
+    val totalItemsCount: Int
+        get() = items.sumOf { it.quantity }
 }
 
 data class OrderItemRequest(
@@ -219,6 +229,42 @@ data class ProductFilter(
             if (type.isNotEmpty()) count += type.size
             if (!material.isNullOrBlank()) count++
             if (!fabric.isNullOrBlank()) count++
+            return count
+        }
+
+    val isEmpty: Boolean
+        get() = activeCount == 0
+}
+
+enum class OrderSortOption(val displayName: String) {
+    DELIVERY_DATE_ASC("Data dostawy: rosnąco"),
+    DELIVERY_DATE_DESC("Data dostawy: malejąco"),
+    CREATED_AT_DESC("Data utworzenia: od najnowszych"),
+    CREATED_AT_ASC("Data utworzenia: od najstarszych"),
+    PRICE_DESC("Cena: od najwyższej"),
+    PRICE_ASC("Cena: od najniższej"),
+    ID_DESC("Numer: od najnowszego"),
+    ID_ASC("Numer: od najstarszego");
+}
+
+data class OrderFilter(
+    val query: String = "",
+    val status: OrderStatus? = null,
+    val minPrice: Double? = null,
+    val maxPrice: Double? = null,
+    val dateFrom: String? = null,
+    val dateTo: String? = null,
+    val sortBy: OrderSortOption = OrderSortOption.DELIVERY_DATE_ASC,
+) {
+    val activeCount: Int
+        get() {
+            var count = 0
+            if (query.isNotBlank()) count++
+            if (minPrice != null) count++
+            if (maxPrice != null) count++
+            if (!dateFrom.isNullOrBlank()) count++
+            if (!dateTo.isNullOrBlank()) count++
+            if (sortBy != OrderSortOption.DELIVERY_DATE_ASC) count++
             return count
         }
 
