@@ -20,7 +20,7 @@ public class JwtService {
 
     public JwtService(
             @Value("${app.jwt.secret:}") String secret,
-            @Value("${app.jwt.expiration-millis:86400000}") long expirationMillis
+            @Value("${app.jwt.expiration-millis:2592000000}") long expirationMillis
     ) {
         if (secret == null || secret.trim().isBlank()) {
             throw new IllegalStateException(

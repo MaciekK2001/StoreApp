@@ -255,6 +255,7 @@ fun OrderFormDialog(
     products: List<Product>,
     initialOrder: FurnitureOrder? = null,
     onDismiss: () -> Unit,
+    onEnsureSessionValid: (() -> Boolean)? = null,
     onCreateProduct: ((
         request: CreateProductRequest,
         imageBytes: ByteArray?,
@@ -942,7 +943,11 @@ fun OrderFormDialog(
 
                                 if (onCreateProduct != null) {
                                     OutlinedButton(
-                                        onClick = { showCreateProductDialog = true },
+                                        onClick = {
+                                            if (onEnsureSessionValid == null || onEnsureSessionValid()) {
+                                                showCreateProductDialog = true
+                                            }
+                                        },
                                         modifier = Modifier.weight(1f),
                                     ) {
                                         Icon(Icons.Default.PostAdd, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -1533,6 +1538,7 @@ fun OrderFormDialog(
         CustomizeOrderItemDialog(
             item = item,
             onCreateProduct = onCreateProduct,
+            onEnsureSessionValid = onEnsureSessionValid,
             onDismiss = { itemToCustomize = null },
             onApply = { updatedItem ->
                 val idx = orderItems.indexOfFirst { it.tempId == item.tempId }
@@ -1549,6 +1555,7 @@ fun OrderFormDialog(
 fun CreateOrderDialog(
     products: List<Product>,
     onDismiss: () -> Unit,
+    onEnsureSessionValid: (() -> Boolean)? = null,
     onCreateProduct: ((
         request: CreateProductRequest,
         imageBytes: ByteArray?,
@@ -1568,6 +1575,7 @@ fun CreateOrderDialog(
         products = products,
         initialOrder = null,
         onDismiss = onDismiss,
+        onEnsureSessionValid = onEnsureSessionValid,
         onCreateProduct = onCreateProduct,
         onSave = onSave,
     )
@@ -1585,6 +1593,7 @@ private fun CustomizeOrderItemDialog(
         onSuccess: (Product) -> Unit,
         onError: (String) -> Unit,
     ) -> Unit)? = null,
+    onEnsureSessionValid: (() -> Boolean)? = null,
     onDismiss: () -> Unit,
     onApply: (FormOrderItem) -> Unit,
 ) {
@@ -1864,6 +1873,9 @@ private fun CustomizeOrderItemDialog(
 
                                 FilledTonalButton(
                                     onClick = {
+                                        if (onEnsureSessionValid != null && !onEnsureSessionValid()) {
+                                            return@FilledTonalButton
+                                        }
                                         isSavingToCatalog = true
                                         catalogSaveMessage = null
                                         catalogSaveError = null

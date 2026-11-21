@@ -27,7 +27,7 @@ class SessionStore(context: Context) {
         val userJson = preferences.getString("user", null) ?: return null
         return runCatching {
             val json = JSONObject(userJson)
-            AuthSession(
+            val session = AuthSession(
                 tokenType = tokenType,
                 token = token,
                 user = User(
@@ -37,6 +37,12 @@ class SessionStore(context: Context) {
                     role = json.getString("role"),
                 ),
             )
+            if (session.isExpired) {
+                clear()
+                null
+            } else {
+                session
+            }
         }.getOrNull()
     }
 

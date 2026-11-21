@@ -43,6 +43,13 @@ data class AuthSession(
 ) {
     val authorizationHeader: String
         get() = "$tokenType $token"
+
+    val isExpired: Boolean
+        get() = JwtUtils.isExpired(token, marginSeconds = 30)
+
+    fun isExpiringSoon(marginSeconds: Long = 120): Boolean {
+        return JwtUtils.isExpired(token, marginSeconds = marginSeconds)
+    }
 }
 
 data class FurnitureTypeItem(

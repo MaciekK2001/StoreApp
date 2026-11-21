@@ -50,6 +50,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import produkcja.meble.mobile.FurnitureUiState
@@ -75,6 +77,10 @@ fun FurnitureApp(viewModel: FurnitureViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.checkSessionOnResume()
+    }
 
     var previousSession by remember { mutableStateOf(state.session) }
     LaunchedEffect(state.session) {
@@ -106,6 +112,7 @@ fun FurnitureApp(viewModel: FurnitureViewModel) {
                 else -> Dashboard(
                     state = state,
                     snackbar = snackbar,
+                    onEnsureSessionValid = viewModel::ensureSessionValid,
                     onSectionSelected = viewModel::selectSection,
                     onOrderSelected = viewModel::selectOrder,
                     onCloseOrder = viewModel::closeOrder,
@@ -160,6 +167,7 @@ fun FurnitureApp(viewModel: FurnitureViewModel) {
 private fun Dashboard(
     state: FurnitureUiState,
     snackbar: SnackbarHostState,
+    onEnsureSessionValid: () -> Boolean,
     onSectionSelected: (MainSection) -> Unit,
     onOrderSelected: (FurnitureOrder) -> Unit,
     onCloseOrder: () -> Unit,
@@ -390,10 +398,12 @@ private fun Dashboard(
             if (selectedOrder == null) {
                 FloatingActionButton(
                     onClick = {
-                        if (state.section == MainSection.PRODUCTS) {
-                            showCreateProductDialog = true
-                        } else {
-                            showCreateOrderDialog = true
+                        if (onEnsureSessionValid()) {
+                            if (state.section == MainSection.PRODUCTS) {
+                                showCreateProductDialog = true
+                            } else {
+                                showCreateOrderDialog = true
+                            }
                         }
                     },
                     containerColor = fabContainerColor,
@@ -430,7 +440,11 @@ private fun Dashboard(
                         selectedOrder?.let { order ->
                             OrderDetails(
                                 order = order,
-                                onEditOrder = { orderToEdit = it },
+                                onEditOrder = {
+                                    if (onEnsureSessionValid()) {
+                                        orderToEdit = it
+                                    }
+                                },
                                 onDeleteOrder = { orderToDelete = it },
                                 onUpdateOrderStatus = onUpdateOrderStatus,
                                 onToggleStatus = { o, active ->
@@ -457,9 +471,17 @@ private fun Dashboard(
                         ProductList(
                             products = state.products,
                             furnitureTypes = state.furnitureTypes,
-                            onEditProduct = { productToEdit = it },
+                            onEditProduct = {
+                                if (onEnsureSessionValid()) {
+                                    productToEdit = it
+                                }
+                            },
                             onDeleteProduct = { productToDelete = it },
-                            onManageFurnitureTypes = { showManageFurnitureTypesDialog = true },
+                            onManageFurnitureTypes = {
+                                if (onEnsureSessionValid()) {
+                                    showManageFurnitureTypesDialog = true
+                                }
+                            },
                         )
                     }
 
@@ -471,7 +493,11 @@ private fun Dashboard(
                             showOnlyActive = state.showOnlyActiveOrders,
                             onToggleShowActive = onToggleShowActiveOrders,
                             onOrderSelected = onOrderSelected,
-                            onEditOrder = { orderToEdit = it },
+                            onEditOrder = {
+                                if (onEnsureSessionValid()) {
+                                    orderToEdit = it
+                                }
+                            },
                             onDeleteOrder = { orderToDelete = it },
                             onUpdateOrderStatus = onUpdateOrderStatus,
                             onToggleStatus = { order, active ->
@@ -595,6 +621,7 @@ private fun Dashboard(
             products = state.products,
             initialOrder = null,
             onDismiss = { showCreateOrderDialog = false },
+            onEnsureSessionValid = onEnsureSessionValid,
             onCreateProduct = onCreateProductWithResult,
             onSave = { request, onDialogSuccess, onDialogError ->
                 onCreateOrder(
@@ -620,6 +647,7 @@ private fun Dashboard(
             products = state.products,
             initialOrder = order,
             onDismiss = { orderToEdit = null },
+            onEnsureSessionValid = onEnsureSessionValid,
             onCreateProduct = onCreateProductWithResult,
             onSave = { request, onDialogSuccess, onDialogError ->
                 onUpdateOrder(

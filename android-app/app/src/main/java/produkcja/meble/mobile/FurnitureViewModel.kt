@@ -65,16 +65,61 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             val session = _uiState.value.session
             if (session != null) {
-                try {
-                    _uiState.update { it.copy(loading = true, error = null) }
-                    loadDashboard(session)
-                } catch (exception: Exception) {
-                    Log.e("FurnitureViewModel", "Błąd ładowania pulpitu", exception)
-                    handleAuthorizedError(exception)
+                if (session.isExpired) {
+                    Log.w("FurnitureViewModel", "Zapisana sesja użytkownika wygasła przed uruchomieniem aplikacji.")
+                    handleSessionExpired("Twoja sesja wygasła. Zaloguj się ponownie.")
+                    _uiState.update { it.copy(initialized = true) }
+                } else {
+                    try {
+                        _uiState.update { it.copy(loading = true, error = null) }
+                        loadDashboard(session)
+                    } catch (exception: Exception) {
+                        Log.e("FurnitureViewModel", "Błąd ładowania pulpitu", exception)
+                        handleAuthorizedError(exception)
+                    }
                 }
             } else {
                 _uiState.update { it.copy(initialized = true) }
             }
+        }
+    }
+
+    /**
+     * Sprawdza ważność sesji przy powrocie aplikacji z tła (Lifecycle ON_RESUME).
+     * Jeśli sesja wygasła, od razu przekierowuje do logowania zanim użytkownik podejmie jakiekolwiek działania.
+     */
+    fun checkSessionOnResume() {
+        val session = _uiState.value.session ?: return
+        if (session.isExpired) {
+            Log.w("FurnitureViewModel", "Wykryto wygaśnięcie sesji podczas wznawiania aplikacji (ON_RESUME).")
+            handleSessionExpired("Twoja sesja wygasła po okresie nieaktywności. Zaloguj się ponownie.")
+        }
+    }
+
+    /**
+     * Weryfikuje ważność tokenu przed wejściem w formularz lub akcję.
+     * Zwraca true jeśli sesja jest ważna i nie wygaśnie w najbliższych [marginSeconds] sekundach.
+     * Jeśli sesja wygasła lub wkrótce wygaśnie, blokuje wejście i prosi o ponowne zalogowanie.
+     */
+    fun ensureSessionValid(marginSeconds: Long = 120): Boolean {
+        val session = _uiState.value.session
+        if (session == null || session.isExpiringSoon(marginSeconds)) {
+            Log.w("FurnitureViewModel", "Próba wykonania akcji przy wygasłym lub wygasającym tokenie JWT.")
+            handleSessionExpired("Twoja sesja wygasła. Zaloguj się ponownie, aby kontynuować.")
+            return false
+        }
+        return true
+    }
+
+    fun handleSessionExpired(message: String = "Sesja wygasła. Zaloguj się ponownie.") {
+        sessionStore.clear()
+        _uiState.update {
+            it.copy(
+                session = null,
+                selectedOrder = null,
+                loading = false,
+                error = message,
+            )
         }
     }
 
@@ -100,6 +145,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun toggleShowOnlyActiveOrders(activeOnly: Boolean) {
+        if (!ensureSessionValid()) return
         val session = _uiState.value.session ?: return
         _uiState.update { it.copy(showOnlyActiveOrders = activeOnly) }
         viewModelScope.launch {
@@ -144,6 +190,10 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun refreshData() {
         val session = _uiState.value.session ?: return
+        if (session.isExpired) {
+            handleSessionExpired("Twoja sesja wygasła. Zaloguj się ponownie.")
+            return
+        }
         viewModelScope.launch {
             try {
                 _uiState.update { it.copy(loading = true, error = null) }
@@ -159,6 +209,10 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun refreshOrders() {
         val session = _uiState.value.session ?: return
+        if (session.isExpired) {
+            handleSessionExpired("Twoja sesja wygasła. Zaloguj się ponownie.")
+            return
+        }
         viewModelScope.launch {
             try {
                 val orders = withContext(Dispatchers.IO) {
@@ -182,10 +236,11 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit,
     ) {
-        val session = _uiState.value.session ?: run {
+        if (!ensureSessionValid()) {
             onError("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.")
             return
         }
+        val session = _uiState.value.session ?: return
         viewModelScope.launch {
             try {
                 val (created, updatedProducts) = withContext(Dispatchers.IO) {
@@ -242,6 +297,9 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         contentType: String? = null,
         additionalImagesBytes: List<ByteArray> = emptyList(),
     ): Product {
+        if (!ensureSessionValid()) {
+            throw ApiException(401, "Brak aktywnej sesji użytkownika")
+        }
         val session = _uiState.value.session ?: throw ApiException(401, "Brak aktywnej sesji")
         val (created, updatedProducts) = withContext(Dispatchers.IO) {
             val product = api.createProduct(
@@ -269,10 +327,11 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit,
     ) {
-        val session = _uiState.value.session ?: run {
+        if (!ensureSessionValid()) {
             onError("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.")
             return
         }
+        val session = _uiState.value.session ?: return
         viewModelScope.launch {
             try {
                 val (updated, updatedProducts) = withContext(Dispatchers.IO) {
@@ -306,10 +365,11 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         onSuccess: (FurnitureTypeItem) -> Unit,
         onError: (String) -> Unit,
     ) {
-        val session = _uiState.value.session ?: run {
+        if (!ensureSessionValid()) {
             onError("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.")
             return
         }
+        val session = _uiState.value.session ?: return
         viewModelScope.launch {
             try {
                 val created = withContext(Dispatchers.IO) {
@@ -335,10 +395,11 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         onSuccess: () -> Unit,
         onError: (String) -> Unit,
     ) {
-        val session = _uiState.value.session ?: run {
+        if (!ensureSessionValid()) {
             onError("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.")
             return
         }
+        val session = _uiState.value.session ?: return
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
@@ -363,10 +424,11 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         onSuccess: () -> Unit,
         onError: (String) -> Unit,
     ) {
-        val session = _uiState.value.session ?: run {
+        if (!ensureSessionValid()) {
             onError("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.")
             return
         }
+        val session = _uiState.value.session ?: return
         val defaultList = listOf(
             "Krzesło", "Fotel", "Sofa", "Narożnik", "Stół", "Stolik kawowy",
             "Biurko", "Łóżko", "Szafa", "Regał", "Komoda", "Szafka nocna", "Półka"
@@ -402,10 +464,11 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit,
     ) {
-        val session = _uiState.value.session ?: run {
+        if (!ensureSessionValid()) {
             onError("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.")
             return
         }
+        val session = _uiState.value.session ?: return
         viewModelScope.launch {
             try {
                 val updatedProducts = withContext(Dispatchers.IO) {
@@ -436,10 +499,11 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit,
     ) {
-        val session = _uiState.value.session ?: run {
+        if (!ensureSessionValid()) {
             onError("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.")
             return
         }
+        val session = _uiState.value.session ?: return
         viewModelScope.launch {
             try {
                 val (created, updatedOrders) = withContext(Dispatchers.IO) {
@@ -466,10 +530,11 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit,
     ) {
-        val session = _uiState.value.session ?: run {
+        if (!ensureSessionValid()) {
             onError("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.")
             return
         }
+        val session = _uiState.value.session ?: return
         viewModelScope.launch {
             try {
                 val (updated, updatedOrders) = withContext(Dispatchers.IO) {
@@ -501,10 +566,11 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         onSuccess: (String) -> Unit = {},
         onError: (String) -> Unit = {},
     ) {
-        val session = _uiState.value.session ?: run {
+        if (!ensureSessionValid()) {
             onError("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.")
             return
         }
+        val session = _uiState.value.session ?: return
         viewModelScope.launch {
             try {
                 val (updatedOrder, updatedOrders) = withContext(Dispatchers.IO) {
@@ -553,10 +619,11 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit,
     ) {
-        val session = _uiState.value.session ?: run {
+        if (!ensureSessionValid()) {
             onError("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.")
             return
         }
+        val session = _uiState.value.session ?: return
         viewModelScope.launch {
             try {
                 val updatedOrders = withContext(Dispatchers.IO) {
@@ -587,6 +654,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun selectOrder(order: FurnitureOrder) {
         val session = _uiState.value.session ?: return
+        if (!ensureSessionValid()) return
         _uiState.update { it.copy(selectedOrder = order, loading = true, error = null) }
         viewModelScope.launch {
             try {
@@ -648,12 +716,7 @@ class FurnitureViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun handleAuthorizedError(exception: Exception) {
         if (exception is ApiException && exception.statusCode == 401) {
-            sessionStore.clear()
-            _uiState.value = FurnitureUiState(
-                initialized = true,
-                serverUrl = currentServerUrl,
-                error = "Sesja wygasła. Zaloguj się ponownie.",
-            )
+            handleSessionExpired("Sesja wygasła. Zaloguj się ponownie.")
         } else {
             _uiState.update {
                 it.copy(initialized = true, loading = false, error = exception.toUserMessage())
